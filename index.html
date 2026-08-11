@@ -24,16 +24,19 @@
     </header>
 
     <section class="hero-card">
-      <div>
-        <span class="hero-label">Épargne semaine</span>
-        <strong id="weekSavedHero">50 €</strong>
-        <span id="weekGoalHero">sur 175 €</span>
+      <div class="hero-top">
+        <div>
+          <span class="hero-label">Épargne semaine</span>
+          <strong id="weekSavedHero">0 €</strong>
+          <span id="weekGoalHero">sur 175 €</span>
+        </div>
+        <div id="heroWeekBadge" class="hero-badge">0 / 7 jours</div>
       </div>
       <div class="progress-wrap">
         <div class="progress-track"><div id="weekProgressBar" class="progress-fill"></div></div>
         <div class="progress-meta">
-          <span id="weekProgressPct">29 %</span>
-          <span id="weekRemaining">125 € restants</span>
+          <span id="weekProgressPct">0 %</span>
+          <span id="weekRemaining">175 € restants</span>
         </div>
       </div>
     </section>
@@ -45,42 +48,44 @@
     </nav>
 
     <section id="dayView" class="view active">
-      <div class="card">
-        <div class="card-head">
-          <div><p class="eyebrow">Saisie</p><h2>Ajouter / modifier un jour</h2></div>
+      <div class="day-nav card">
+        <button id="prevDayBtn" class="nav-arrow" aria-label="Jour précédent">‹</button>
+
+        <button id="datePickerBtn" class="date-display" aria-label="Choisir une date">
+          <span id="dayContext" class="date-context">Aujourd’hui</span>
+          <strong id="selectedDayLabel">—</strong>
+          <span class="calendar-hint">Calendrier</span>
+        </button>
+
+        <button id="nextDayBtn" class="nav-arrow" aria-label="Jour suivant">›</button>
+
+        <input id="hiddenDatePicker" class="hidden-date" type="date" aria-label="Date" />
+      </div>
+
+      <div class="day-summary-card">
+        <div class="day-summary-top">
+          <div>
+            <p class="eyebrow">Total de la journée</p>
+            <div id="dayTotalLarge" class="day-total-large">0 €</div>
+          </div>
+          <div id="dayStatusBadge" class="status-pill neutral">À saisir</div>
         </div>
 
-        <label class="field">
-          <span>Date</span>
-          <input id="entryDate" type="date" />
-        </label>
-
-        <div class="grid-2">
-          <label class="field">
+        <div class="platform-row">
+          <div class="platform-item">
             <span>Uber Eats</span>
-            <div class="money-input"><input id="uberInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
-          </label>
-          <label class="field">
+            <strong id="dayUber">0 €</strong>
+          </div>
+          <div class="platform-divider"></div>
+          <div class="platform-item">
             <span>Deliveroo</span>
-            <div class="money-input"><input id="deliverooInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
-          </label>
+            <strong id="dayDeliveroo">0 €</strong>
+          </div>
         </div>
 
-        <button id="saveBtn" class="primary-btn">Enregistrer la journée</button>
-        <p id="saveMsg" class="save-msg" aria-live="polite"></p>
-      </div>
-
-      <div class="metric-grid">
-        <article class="metric-card"><span>Total gagné</span><strong id="dayTotal">0 €</strong></article>
-        <article class="metric-card"><span>Mis de côté</span><strong id="daySaved">0 €</strong></article>
-        <article class="metric-card"><span>Bonus plaisir</span><strong id="dayBonus">0 €</strong></article>
-        <article class="metric-card"><span>Statut</span><strong id="dayStatus">—</strong></article>
-      </div>
-
-      <div class="card">
         <div class="bar-legend">
           <span><i class="legend-dot saved"></i>Épargne</span>
-          <span><i class="legend-dot bonus"></i>Bonus</span>
+          <span><i class="legend-dot bonus"></i>Bonus plaisir</span>
         </div>
         <div class="stack-track large">
           <div id="daySavedBar" class="stack saved"></div>
@@ -91,6 +96,19 @@
           <span id="dayBonusLabel">+0 €</span>
         </div>
       </div>
+
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span>Mis de côté</span>
+          <strong id="daySaved">0 €</strong>
+        </article>
+        <article class="metric-card">
+          <span>Bonus plaisir</span>
+          <strong id="dayBonus">0 €</strong>
+        </article>
+      </div>
+
+      <button id="openEntryBtn" class="fab" aria-label="Ajouter ou modifier la journée">+</button>
     </section>
 
     <section id="weekView" class="view">
@@ -103,7 +121,8 @@
 
       <div class="card">
         <div class="card-head">
-          <div><p class="eyebrow">Semaine en cours</p><h2 id="weekTitle">—</h2></div>
+          <div><p class="eyebrow">Semaine sélectionnée</p><h2 id="weekTitle">—</h2></div>
+          <button id="thisWeekBtn" class="ghost-btn compact">Cette semaine</button>
         </div>
         <div id="weekRows" class="week-rows"></div>
       </div>
@@ -119,6 +138,37 @@
       </div>
     </section>
   </main>
+
+  <div id="entryBackdrop" class="sheet-backdrop" hidden></div>
+  <section id="entrySheet" class="bottom-sheet" aria-hidden="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <div>
+        <p class="eyebrow">Saisie</p>
+        <h2 id="sheetTitle">Ajouter / modifier</h2>
+      </div>
+      <button id="closeEntryBtn" class="close-btn" aria-label="Fermer">×</button>
+    </div>
+
+    <label class="field">
+      <span>Date</span>
+      <div class="date-input-wrap"><input id="entryDate" type="date" /></div>
+    </label>
+
+    <div class="grid-2">
+      <label class="field">
+        <span>Uber Eats</span>
+        <div class="money-input"><input id="uberInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
+      </label>
+      <label class="field">
+        <span>Deliveroo</span>
+        <div class="money-input"><input id="deliverooInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
+      </label>
+    </div>
+
+    <button id="saveBtn" class="primary-btn">Enregistrer la journée</button>
+    <p id="saveMsg" class="save-msg" aria-live="polite"></p>
+  </section>
 
   <script src="livraison-app.js"></script>
 </body>
