@@ -1,0 +1,39 @@
+const DAILY_TARGET=25,WEEKLY_TARGET=175,STORAGE_KEY="livraisons.entries.v1",THEME_KEY="livraisons.theme.v1";
+const seed=[{date:"2026-08-10",uber:21,deliveroo:17},{date:"2026-08-11",uber:30,deliveroo:9}];
+let entries=loadEntries(),selectedDate="2026-08-11";
+function loadEntries(){const raw=localStorage.getItem(STORAGE_KEY);if(raw){try{return JSON.parse(raw)}catch(e){}}localStorage.setItem(STORAGE_KEY,JSON.stringify(seed));return [...seed]}
+function saveEntries(){localStorage.setItem(STORAGE_KEY,JSON.stringify(entries))}
+function euro(n){return `${Number(n).toLocaleString("fr-FR",{maximumFractionDigits:2})} €`}
+function parseDate(s){const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)}
+function startOfWeek(date){const d=new Date(date),day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);d.setHours(0,0,0,0);return d}
+function addDays(date,n){const d=new Date(date);d.setDate(d.getDate()+n);return d}
+function iso(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function shortDate(d){return new Intl.DateTimeFormat("fr-FR",{weekday:"short",day:"numeric",month:"short"}).format(d)}
+function longDate(d){return new Intl.DateTimeFormat("fr-FR",{day:"numeric",month:"long"}).format(d)}
+function calc(e){const total=Number(e?.uber||0)+Number(e?.deliveroo||0),saved=Math.min(total,DAILY_TARGET);return{total,saved,bonus:Math.max(0,total-DAILY_TARGET),success:total>=DAILY_TARGET}}
+function getEntry(date){return entries.find(e=>e.date===date)}
+function upsertEntry(entry){const i=entries.findIndex(e=>e.date===entry.date);if(i>=0)entries[i]=entry;else entries.push(entry);entries.sort((a,b)=>a.date.localeCompare(b.date));saveEntries()}
+
+const entryDate=document.getElementById("entryDate"),uberInput=document.getElementById("uberInput"),deliverooInput=document.getElementById("deliverooInput"),saveMsg=document.getElementById("saveMsg");
+function loadDate(date){selectedDate=date;entryDate.value=date;const e=getEntry(date);uberInput.value=e?.uber??"";deliverooInput.value=e?.deliveroo??"";renderDay()}
+entryDate.addEventListener("change",()=>loadDate(entryDate.value));uberInput.addEventListener("input",renderDay);deliverooInput.addEventListener("input",renderDay);
+document.getElementById("saveBtn").addEventListener("click",()=>{const entry={date:entryDate.value,uber:Number(uberInput.value||0),deliveroo:Number(deliverooInput.value||0)};upsertEntry(entry);selectedDate=entry.date;saveMsg.textContent="Journée enregistrée ✓";setTimeout(()=>saveMsg.textContent="",1800);renderAll()});
+
+function renderDay(){const c=calc({uber:Number(uberInput.value||0),deliveroo:Number(deliverooInput.value||0)});document.getElementById("dayTotal").textContent=euro(c.total);document.getElementById("daySaved").textContent=euro(c.saved);document.getElementById("dayBonus").textContent=euro(c.bonus);document.getElementById("dayStatus").textContent=c.success?"Atteint ✓":`${euro(Math.max(0,DAILY_TARGET-c.total))} à faire`;const denom=Math.max(c.total,DAILY_TARGET);document.getElementById("daySavedBar").style.width=`${(c.saved/denom)*100}%`;document.getElementById("dayBonusBar").style.width=`${(c.bonus/denom)*100}%`;document.getElementById("daySavedLabel").textContent=`${euro(c.saved)} / 25 €`;document.getElementById("dayBonusLabel").textContent=`+${euro(c.bonus)}`}
+
+function weekData(reference){const start=startOfWeek(reference),days=[];let saved=0,earned=0,bonus=0,success=0;for(let i=0;i<7;i++){const d=addDays(start,i),date=iso(d),e=getEntry(date),c=calc(e);saved+=c.saved;earned+=c.total;bonus+=c.bonus;if(c.success)success++;days.push({d,date,e,c})}return{start,end:addDays(start,6),days,saved,earned,bonus,success}}
+function renderWeek(){const w=weekData(parseDate(selectedDate));const pct=Math.min(100,(w.saved/WEEKLY_TARGET)*100);document.getElementById("weekSavedHero").textContent=euro(w.saved);document.getElementById("weekGoalHero").textContent=`sur ${WEEKLY_TARGET} €`;document.getElementById("weekProgressBar").style.width=`${pct}%`;document.getElementById("weekProgressPct").textContent=`${Math.round((w.saved/WEEKLY_TARGET)*100)} %`;document.getElementById("weekRemaining").textContent=`${euro(Math.max(0,WEEKLY_TARGET-w.saved))} restants`;document.getElementById("weekSaved").textContent=euro(w.saved);document.getElementById("weekEarned").textContent=euro(w.earned);document.getElementById("weekBonus").textContent=euro(w.bonus);document.getElementById("weekSuccess").textContent=`${w.success} / 7`;document.getElementById("weekTitle").textContent=`${longDate(w.start)} – ${longDate(w.end)}`;const rows=document.getElementById("weekRows");rows.innerHTML="";w.days.forEach(x=>{const denom=Math.max(x.c.total,DAILY_TARGET),row=document.createElement("div");row.innerHTML=`<div class="week-row-top"><span>${shortDate(x.d)}</span><strong>${euro(x.c.total)}</strong></div><div class="stack-track"><div class="stack saved" style="width:${(x.c.saved/denom)*100}%"></div><div class="stack bonus" style="width:${(x.c.bonus/denom)*100}%"></div></div><div class="week-row-meta"><span>${euro(x.c.saved)} épargnés</span><span>${x.c.bonus?`+${euro(x.c.bonus)} bonus`:(x.c.total?`${euro(DAILY_TARGET-x.c.total)} manquants`:"—")}</span></div>`;rows.appendChild(row)})}
+
+function renderHistory(){const list=document.getElementById("historyList");list.innerHTML="";const sorted=[...entries].sort((a,b)=>b.date.localeCompare(a.date));if(!sorted.length){list.innerHTML='<div class="empty">Aucune journée enregistrée.</div>';return}sorted.forEach(e=>{const c=calc(e),item=document.createElement("div");item.className="history-item";item.innerHTML=`<div><strong>${shortDate(parseDate(e.date))} · ${euro(c.total)}</strong><small>Uber ${euro(e.uber)} · Deliveroo ${euro(e.deliveroo)} · Épargne ${euro(c.saved)} · Bonus ${euro(c.bonus)}</small></div><div class="history-actions"><button class="mini-btn edit">Modifier</button><button class="mini-btn delete">Suppr.</button></div>`;item.querySelector(".edit").addEventListener("click",()=>{loadDate(e.date);switchView("day")});item.querySelector(".delete").addEventListener("click",()=>{if(confirm("Supprimer cette journée ?")){entries=entries.filter(x=>x.date!==e.date);saveEntries();renderAll()}});list.appendChild(item)})}
+
+document.getElementById("exportBtn").addEventListener("click",()=>{const rows=[["Date","Uber Eats","Deliveroo","Total","Epargne","Bonus"]];entries.forEach(e=>{const c=calc(e);rows.push([e.date,e.uber,e.deliveroo,c.total,c.saved,c.bonus])});const csv=rows.map(r=>r.join(";")).join("\n"),blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="livraisons.csv";a.click();URL.revokeObjectURL(url)});
+function switchView(view){document.querySelectorAll(".seg-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));document.getElementById(`${view}View`).classList.add("active")}
+document.querySelectorAll(".seg-btn").forEach(b=>b.addEventListener("click",()=>switchView(b.dataset.view)));
+
+function applyTheme(theme){document.documentElement.classList.remove("dark","light");if(theme)document.documentElement.classList.add(theme);document.getElementById("themeBtn").textContent=theme==="dark"?"☀":"☾"}
+let theme=localStorage.getItem(THEME_KEY)||"";applyTheme(theme);
+document.getElementById("themeBtn").addEventListener("click",()=>{const isDark=document.documentElement.classList.contains("dark")||(!document.documentElement.classList.contains("light")&&matchMedia("(prefers-color-scheme: dark)").matches);theme=isDark?"light":"dark";localStorage.setItem(THEME_KEY,theme);applyTheme(theme)});
+
+function renderAll(){renderDay();renderWeek();renderHistory()}
+loadDate("2026-08-11");renderAll();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("livraison-sw.js").catch(()=>{}))}
