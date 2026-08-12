@@ -1,175 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#111827" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Livraisons" />
-  <link rel="manifest" href="livraison.webmanifest" />
-  <link rel="apple-touch-icon" href="livraison-icon-180.png" />
-  <link rel="icon" href="livraison-icon-192.png" />
-  <link rel="stylesheet" href="livraison-styles.css" />
-  <title>Livraisons</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DriveFlow">
+  <link rel="manifest" href="driveflow.webmanifest">
+  <link rel="apple-touch-icon" href="driveflow-icon-180.png">
+  <link rel="icon" href="driveflow-icon-192.png">
+  <link rel="stylesheet" href="driveflow-styles.css">
+  <title>DriveFlow</title>
 </head>
 <body>
+  <div id="splash" class="splash"><img src="driveflow-icon-192.png" alt=""><div class="splash-wordmark">Drive<span>Flow</span></div><small>Earnings & Activity Tracker</small></div>
   <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">Suivi indépendant</p>
-        <h1>Livraisons</h1>
-      </div>
-      <button id="themeBtn" class="icon-btn" aria-label="Changer le thème">☾</button>
-    </header>
+    <header class="app-header"><div class="brand-mini"><img src="driveflow-icon-192.png" alt=""><div class="brand-text">Drive<span>Flow</span></div></div><button id="privacyBtn" class="icon-btn" aria-label="Masquer les montants">◉</button></header>
 
-    <section class="hero-card">
-      <div class="hero-top">
-        <div>
-          <span class="hero-label">Épargne semaine</span>
-          <strong id="weekSavedHero">0 €</strong>
-          <span id="weekGoalHero">sur 175 €</span>
-        </div>
-        <div id="heroWeekBadge" class="hero-badge">0 / 7 jours</div>
-      </div>
-      <div class="progress-wrap">
-        <div class="progress-track"><div id="weekProgressBar" class="progress-fill"></div></div>
-        <div class="progress-meta">
-          <span id="weekProgressPct">0 %</span>
-          <span id="weekRemaining">175 € restants</span>
-        </div>
-      </div>
-    </section>
-
-    <nav class="segmented" aria-label="Vue">
-      <button data-view="day" class="seg-btn active">Jour</button>
-      <button data-view="week" class="seg-btn">Semaine</button>
-      <button data-view="history" class="seg-btn">Historique</button>
-    </nav>
-
-    <section id="dayView" class="view active">
-      <div class="day-nav card">
-        <button id="prevDayBtn" class="nav-arrow" aria-label="Jour précédent">‹</button>
-
-        <button id="datePickerBtn" class="date-display" aria-label="Choisir une date">
-          <span id="dayContext" class="date-context">Aujourd’hui</span>
-          <strong id="selectedDayLabel">—</strong>
-          <span class="calendar-hint">Calendrier</span>
-        </button>
-
-        <button id="nextDayBtn" class="nav-arrow" aria-label="Jour suivant">›</button>
-
-        <input id="hiddenDatePicker" class="hidden-date" type="date" aria-label="Date" />
-      </div>
-
-      <div class="day-summary-card">
-        <div class="day-summary-top">
-          <div>
-            <p class="eyebrow">Total de la journée</p>
-            <div id="dayTotalLarge" class="day-total-large">0 €</div>
-          </div>
-          <div id="dayStatusBadge" class="status-pill neutral">À saisir</div>
-        </div>
-
-        <div class="platform-row">
-          <div class="platform-item">
-            <span>Uber Eats</span>
-            <strong id="dayUber">0 €</strong>
-          </div>
-          <div class="platform-divider"></div>
-          <div class="platform-item">
-            <span>Deliveroo</span>
-            <strong id="dayDeliveroo">0 €</strong>
-          </div>
-        </div>
-
-        <div class="bar-legend">
-          <span><i class="legend-dot saved"></i>Épargne</span>
-          <span><i class="legend-dot bonus"></i>Bonus plaisir</span>
-        </div>
-        <div class="stack-track large">
-          <div id="daySavedBar" class="stack saved"></div>
-          <div id="dayBonusBar" class="stack bonus"></div>
-        </div>
-        <div class="split-meta">
-          <span id="daySavedLabel">0 € / 25 €</span>
-          <span id="dayBonusLabel">+0 €</span>
-        </div>
-      </div>
-
-      <div class="metric-grid">
-        <article class="metric-card">
-          <span>Mis de côté</span>
-          <strong id="daySaved">0 €</strong>
-        </article>
-        <article class="metric-card">
-          <span>Bonus plaisir</span>
-          <strong id="dayBonus">0 €</strong>
-        </article>
-      </div>
-
-      <button id="openEntryBtn" class="fab" aria-label="Ajouter ou modifier la journée">+</button>
+    <section id="todayView" class="view active">
+      <div class="date-switcher card"><button id="prevDay" class="nav-btn">‹</button><button id="openDatePicker" class="date-center"><span id="dateContext">Aujourd’hui</span><strong id="dateLabel">—</strong></button><button id="nextDay" class="nav-btn">›</button><input id="datePicker" class="hidden-date" type="date"></div>
+      <section class="hero-card"><div class="hero-label">Total gagné</div><div id="todayTotal" class="hero-amount money">0 €</div><div class="platform-inline"><span>Uber Eats <strong id="todayUber" class="money">0 €</strong></span><span>Deliveroo <strong id="todayDeliveroo" class="money">0 €</strong></span></div></section>
+      <section class="card goal-card"><div class="section-row"><div><span class="section-label">Objectif du jour</span><strong id="goalText">25 €</strong></div><div id="goalBadge" class="badge neutral">À saisir</div></div><div class="progress"><div id="goalProgress"></div></div><div class="goal-bottom"><span id="savedText" class="money">0 € mis de côté</span><span id="bonusText" class="money">+0 € bonus</span></div></section>
+      <div class="metric-grid"><article class="metric-card"><span>Temps travaillé</span><strong id="workTime">—</strong></article><article class="metric-card"><span>Kilomètres</span><strong id="distanceText">—</strong></article><article class="metric-card"><span>Gain / heure</span><strong id="hourlyText" class="money">—</strong></article><article class="metric-card"><span>Gain / km</span><strong id="perKmText" class="money">—</strong></article></div>
+      <button id="openEntry" class="fab" aria-label="Ajouter ou modifier">+</button>
     </section>
 
     <section id="weekView" class="view">
-      <div class="metric-grid">
-        <article class="metric-card"><span>Épargné</span><strong id="weekSaved">0 €</strong></article>
-        <article class="metric-card"><span>Total gagné</span><strong id="weekEarned">0 €</strong></article>
-        <article class="metric-card"><span>Bonus</span><strong id="weekBonus">0 €</strong></article>
-        <article class="metric-card"><span>Jours réussis</span><strong id="weekSuccess">0 / 7</strong></article>
-      </div>
-
-      <div class="card">
-        <div class="card-head">
-          <div><p class="eyebrow">Semaine sélectionnée</p><h2 id="weekTitle">—</h2></div>
-          <button id="thisWeekBtn" class="ghost-btn compact">Cette semaine</button>
-        </div>
-        <div id="weekRows" class="week-rows"></div>
-      </div>
+      <div class="section-head"><div><span class="eyebrow">Semaine</span><h2 id="weekRange">—</h2></div><button id="thisWeekBtn" class="ghost-btn">Cette semaine</button></div>
+      <div class="hero-card compact-hero"><div><span class="hero-label">Épargne</span><div><strong id="weekSaved" class="hero-amount small money">0 €</strong> <span id="weekGoalLabel" class="muted">/ 175 €</span></div></div><div class="progress"><div id="weekProgress"></div></div><div class="goal-bottom"><span id="weekSuccess">0 / 7 jours</span><span id="weekRemaining" class="money">175 € restants</span></div></div>
+      <div class="metric-grid"><article class="metric-card"><span>Total gagné</span><strong id="weekEarned" class="money">0 €</strong></article><article class="metric-card"><span>Bonus</span><strong id="weekBonus" class="money">0 €</strong></article><article class="metric-card"><span>Temps</span><strong id="weekHours">—</strong></article><article class="metric-card"><span>Distance</span><strong id="weekDistance">—</strong></article></div>
+      <section class="card"><div class="section-row"><span class="section-label">Épargne par jour</span><span class="legend-mini">objectif quotidien</span></div><div id="weekBars" class="week-bars"></div></section>
     </section>
 
-    <section id="historyView" class="view">
-      <div class="card">
-        <div class="card-head">
-          <div><p class="eyebrow">Historique</p><h2>Toutes les journées</h2></div>
-          <button id="exportBtn" class="ghost-btn">Exporter CSV</button>
-        </div>
-        <div id="historyList" class="history-list"></div>
-      </div>
+    <section id="statsView" class="view">
+      <div class="section-head"><div><span class="eyebrow">Analyse</span><h2>Stats</h2></div><select id="statsRange" class="select-small"><option value="all">Global</option><option value="month">Ce mois</option><option value="week">Cette semaine</option></select></div>
+      <div class="metric-grid"><article class="metric-card"><span>Gains</span><strong id="statsEarned" class="money">0 €</strong></article><article class="metric-card"><span>Épargne</span><strong id="statsSaved" class="money">0 €</strong></article><article class="metric-card"><span>Bonus</span><strong id="statsBonus" class="money">0 €</strong></article><article class="metric-card"><span>Jours travaillés</span><strong id="statsDays">0</strong></article></div>
+      <section class="card stats-list"><div><span>Moyenne / jour</span><strong id="avgDay" class="money">—</strong></div><div><span>Moyenne / heure</span><strong id="avgHour" class="money">—</strong></div><div><span>Meilleur jour</span><strong id="bestDay" class="money">—</strong></div><div><span>Distance totale</span><strong id="statsKm">—</strong></div></section>
+      <section class="card"><div class="section-label">Répartition par plateforme</div><div class="platform-share"><div><span>Uber Eats</span><strong id="shareUber">0 %</strong></div><div><span>Deliveroo</span><strong id="shareDeliveroo">0 %</strong></div></div><div class="share-track"><div id="shareUberBar"></div><div id="shareDelBar"></div></div></section>
+    </section>
+
+    <section id="historyView" class="view"><div class="section-head"><div><span class="eyebrow">Données</span><h2>Historique</h2></div></div><div id="historyList" class="history-list"></div></section>
+
+    <section id="settingsView" class="view">
+      <div class="section-head"><div><span class="eyebrow">DriveFlow</span><h2>Réglages</h2></div></div>
+      <section class="card settings-card"><label><span>Objectif journalier</span><div class="inline-input"><input id="dailyGoalInput" type="number" step="0.01" min="0"><span>€</span></div></label><label><span>Apparence</span><select id="themeSelect"><option value="system">Automatique</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label></section>
+      <section class="card"><div class="section-row"><div><span class="section-label">Import CSV</span><p class="helper">Importe des courses générées à partir de captures Uber/Deliveroo.</p></div></div><input id="csvInput" type="file" accept=".csv,text/csv" hidden><button id="chooseCsv" class="primary-btn secondary">Choisir un fichier CSV</button><div id="importStatus" class="import-status"></div><a href="driveflow-import-template.csv" download class="text-link">Télécharger le modèle CSV</a></section>
+      <section class="card"><div class="section-label">Sauvegarde</div><div class="button-stack"><button id="exportJson" class="ghost-full">Sauvegarder mes données</button><input id="restoreJsonInput" type="file" accept=".json,application/json" hidden><button id="restoreJson" class="ghost-full">Restaurer une sauvegarde</button><button id="exportCsv" class="ghost-full">Exporter mon historique CSV</button></div></section>
+      <section class="card about-card"><img src="driveflow-icon-192.png" alt=""><div><strong>DriveFlow</strong><span>Version 3.0</span></div></section>
     </section>
   </main>
 
-  <div id="entryBackdrop" class="sheet-backdrop" hidden></div>
-  <section id="entrySheet" class="bottom-sheet" aria-hidden="true">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <div>
-        <p class="eyebrow">Saisie</p>
-        <h2 id="sheetTitle">Ajouter / modifier</h2>
-      </div>
-      <button id="closeEntryBtn" class="close-btn" aria-label="Fermer">×</button>
-    </div>
+  <nav class="bottom-nav"><button data-view="today" class="active"><span>⌂</span><small>Aujourd’hui</small></button><button data-view="week"><span>▣</span><small>Semaine</small></button><button data-view="stats"><span>▥</span><small>Stats</small></button><button data-view="history"><span>↺</span><small>Historique</small></button><button data-view="settings"><span>⚙</span><small>Réglages</small></button></nav>
 
-    <label class="field">
-      <span>Date</span>
-      <div class="date-input-wrap"><input id="entryDate" type="date" /></div>
-    </label>
-
-    <div class="grid-2">
-      <label class="field">
-        <span>Uber Eats</span>
-        <div class="money-input"><input id="uberInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
-      </label>
-      <label class="field">
-        <span>Deliveroo</span>
-        <div class="money-input"><input id="deliverooInput" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0,00" /><span>€</span></div>
-      </label>
-    </div>
-
-    <button id="saveBtn" class="primary-btn">Enregistrer la journée</button>
-    <p id="saveMsg" class="save-msg" aria-live="polite"></p>
-  </section>
-
-  <script src="livraison-app.js"></script>
+  <div id="entryBackdrop" class="backdrop" hidden></div>
+  <section id="entrySheet" class="sheet" aria-hidden="true"><div class="sheet-handle"></div><div class="sheet-head"><div><span class="eyebrow">Journée</span><h2 id="entryTitle">Ajouter / modifier</h2></div><button id="closeEntry" class="close-btn">×</button></div><label class="field"><span>Date</span><input id="entryDate" type="date"></label><div class="grid-2"><label class="field"><span>Uber Eats</span><div class="money-input"><input id="uberInput" type="number" step="0.01" min="0"><span>€</span></div></label><label class="field"><span>Deliveroo</span><div class="money-input"><input id="deliverooInput" type="number" step="0.01" min="0"><span>€</span></div></label></div><div class="section-label sheet-section">Horaires de travail</div><div class="grid-2"><label class="field"><span>Début</span><input id="startTime" type="time"></label><label class="field"><span>Fin</span><input id="endTime" type="time"></label></div><div class="section-label sheet-section">Kilométrage compteur</div><div class="grid-2"><label class="field"><span>Départ</span><div class="money-input"><input id="odoStart" type="number" step="0.1" min="0"><span>km</span></div></label><label class="field"><span>Arrivée</span><div class="money-input"><input id="odoEnd" type="number" step="0.1" min="0"><span>km</span></div></label></div><label class="field"><span>Note (facultatif)</span><textarea id="noteInput" rows="2" placeholder="Ex. session midi, pluie, forte demande…"></textarea></label><button id="saveEntry" class="primary-btn">Enregistrer</button><p id="entryMsg" class="save-msg"></p></section>
+  <script src="driveflow-app.js"></script>
 </body>
 </html>
