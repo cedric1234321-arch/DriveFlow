@@ -20,6 +20,22 @@ DATA.sessionMinutes = s => {
   return Math.max(0,b-a-pauses);
 };
 
+// A cash tip must never silently disappear if its session is deleted. When a
+// session is removed, IO detaches the tip; this wrapper keeps the detached tip
+// in that business day's CA (without creating an order or distance).
+const originalDayMetrics=DATA.dayMetrics.bind(DATA);
+DATA.dayMetrics=(state,ctx,date)=>{
+  const d=originalDayMetrics(state,ctx,date);if(d._orphanTipsApplied)return d;
+  const orphan=(state.cashTips||[]).filter(t=>t.date===date&&!t.sessionId),extra=orphan.reduce((a,t)=>a+Math.max(0,DF.n(t.amount)),0);
+  if(extra>0){
+    const ur=DF.resolveUrssaf(state.settings,date),extraUr=ur.enabled?extra*ur.rate/100:0;
+    d.ca+=extra;d.cashTips+=extra;d.netAfterFuel+=extra;d.urssaf+=extraUr;d.netFinal+=extra-extraUr;
+    orphan.forEach(t=>{if(t.platform==="uber")d.uber+=DF.n(t.amount);if(t.platform==="deliveroo")d.deliveroo+=DF.n(t.amount);});
+    d.hourlyGross=d.hours?d.ca/d.hours:0;d.hourlyNet=d.hours?d.netFinal/d.hours:0;
+  }
+  d._orphanTipsApplied=true;return d;
+};
+
 DATA.auditState = state => {
   const issues=[];
   for(const key of ["sessions","uberBatches","deliverooOrders","cashTips","weeklyPlans"])if(!Array.isArray(state?.[key]))issues.push(`${key}:not_array`);
