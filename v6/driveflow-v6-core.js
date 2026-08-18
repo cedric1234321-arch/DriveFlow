@@ -79,9 +79,13 @@ DF.resolveEffectiveValue = (history, date, key) => {
 DF.resolveUrssaf = (settings, date) => {
   const enabled = settings?.urssafEnabled === true;
   if (!enabled) return { enabled: false, rate: 0, source: "disabled" };
-  const row = DF.resolveEffectiveRow(settings?.urssafRateHistory, date);
-  const rate = row ? Math.max(0, DF.n(row.ratePct)) : Math.max(0, DF.n(settings?.urssafRatePct));
-  return { enabled: true, rate, source: row ? "history" : "current" };
+  const history = Array.isArray(settings?.urssafRateHistory) ? settings.urssafRateHistory.filter(x=>x?.effectiveFrom) : [];
+  const row = DF.resolveEffectiveRow(history, date);
+  if (row) return { enabled: true, rate: Math.max(0, DF.n(row.ratePct)), source: "history" };
+  // Once an effective-dated history exists, dates before its first row must not
+  // inherit today's rate retroactively.
+  if (history.length) return { enabled: true, rate: 0, source: "before_history" };
+  return { enabled: true, rate: Math.max(0, DF.n(settings?.urssafRatePct)), source: "current" };
 };
 
 DF.sessionFuel = ({ distanceKm, date, fuelPriceHistory, consumptionHistory, priceOverride, consumptionOverride }) => {
