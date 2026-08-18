@@ -1,6 +1,8 @@
 const assert = require('assert');
 const DF = require('./driveflow-v6-core.js');
 const INT = require('./driveflow-v6-intelligence.js');
+const BT = require('./driveflow-v6-backtest.js');
+const IO = require('./driveflow-v6-io.js');
 
 const noUrssaf = DF.financialMetrics({ca:100,fuel:15,urssafEnabled:false,urssafRatePct:21.2});
 assert.equal(DF.round2(noUrssaf.netFinal),85);
@@ -58,7 +60,7 @@ for(let d=0;d<5;d++){
   const date=`2026-08-${21+d}`;
   const weekday=(4+d)%7;
   candidates.push({id:`eveA${d}`,date,dateDays:100+d,weekday,startHour:18,hours:3});
-  candidates.push({id:`eveB${d}`,date,dateDays:100+d,weekday,startHour:19,hours:3}); // overlaps eveA
+  candidates.push({id:`eveB${d}`,date,dateDays:100+d,weekday,startHour:19,hours:3});
   candidates.push({id:`mid${d}`,date,dateDays:100+d,weekday,startHour:12,hours:2});
 }
 const plan=INT.planWeek({
@@ -76,11 +78,32 @@ assert(plan.expectedCa>0);
 assert(plan.simulationRuns>=100);
 assert(plan.caGoalProbability>=0 && plan.caGoalProbability<=1);
 assert(plan.savingsGoalProbability>=0 && plan.savingsGoalProbability<=1);
-for(let i=0;i<plan.selected.length;i++){
-  for(let j=i+1;j<plan.selected.length;j++){
-    assert.equal(INT.candidatesOverlap(plan.selected[i],plan.selected[j]),false,'planner selected overlapping sessions');
-  }
-}
+for(let i=0;i<plan.selected.length;i++)for(let j=i+1;j<plan.selected.length;j++)assert.equal(INT.candidatesOverlap(plan.selected[i],plan.selected[j]),false,'planner selected overlapping sessions');
 assert(plan.caRange.low<=plan.caRange.median && plan.caRange.median<=plan.caRange.high);
+
+// CSV and session safety.
+const csv='date;time;earnings;order_count;merchant\n18/08/2026;19:30;8,50;2;Test Food';
+const parsed=IO.parseCSV(csv);
+assert.equal(parsed.length,1);
+assert.equal(parsed[0].merchant,'Test Food');
+const state={sessions:[],uberBatches:[],deliverooOrders:[],cashTips:[],settings:{}};
+IO.importDeliverooRows(state,parsed);
+assert.equal(state.deliverooOrders.length,1);
+assert.equal(state.deliverooOrders[0].orderCount,2);
+assert.equal(IO.validateSession({id:'x',date:'2026-08-18',start:'18:00',end:'21:00',pauseStart:'',pauseEnd:'',odoStart:100,odoEnd:120},[]),'');
+assert(IO.validateSession({id:'x',date:'2026-08-18',start:'18:00',end:'21:00',pauseStart:'',pauseEnd:'',odoStart:120,odoEnd:100},[]).includes('kilométrage'));
+
+// Weather ablation: rain has a strong repeatable effect that the base model cannot see.
+const wxRows=[];
+const baseDate=new Date('2025-01-01T12:00:00');
+for(let i=0;i<150;i++){
+  const d=new Date(baseDate);d.setDate(d.getDate()+i);const date=d.toISOString().slice(0,10),rain=i%2===0;
+  wxRows.push({id:`w${i}`,date,dateDays:20000+i,weekday:2,startHour:19,hours:3,ca:3*(rain?20:10),caHourly:rain?20:10,kmHourly:10,timeQuality:'exact',weather:{rainMm:rain?4:0}});
+}
+const weatherSimilarity=(a,b)=>a.rainMm===b.rainMm?2:.05;
+const ablation=BT.evaluateWeather(wxRows,{weatherSimilarity,minTraining:40,minTests:50,enableThresholdPct:1});
+assert.equal(ablation.status,'ok');
+assert.equal(ablation.enabled,true);
+assert(ablation.weatherMae<ablation.baseMae);
 
 console.log('DriveFlow V6 smoke tests passed');
