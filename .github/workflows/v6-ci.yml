@@ -1,0 +1,32 @@
+name: DriveFlow V6 CI
+
+on:
+  push:
+    branches: [v6-development]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-v6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check v6/driveflow-v6-core.js
+          node --check v6/driveflow-v6-migration.js
+          node --check v6/driveflow-v6-weather.js
+          node --check v6/driveflow-v6-intelligence.js
+          node --check v6/driveflow-v6-data.js
+          node --check v6/driveflow-v6-app.js
+          node --check v6/driveflow-v6-sw.js
+      - name: Business logic smoke tests
+        run: node v6/test-driveflow-v6.js
+      - name: Verify V6 app references
+        run: |
+          grep -q 'driveflow-v6-app.js' v6/index.html
+          grep -q 'driveflow-v6-data.js' v6/index.html
+          grep -q 'driveflow-v6-intelligence.js' v6/index.html
