@@ -17,7 +17,6 @@ const K=Object.freeze({
   legacyBackup:"driveflow.v6.legacyUnifiedBackup"
 });
 DATA.PERSISTENCE_KEYS=K;
-// Existing app reset code removes DATA.KEY. Point it to the split-state marker.
 DATA.KEY=K.meta;
 
 let lastSerialized={};
@@ -44,6 +43,7 @@ DATA.persistSplit = state => {
   return {writes};
 };
 DATA.clearSplitStorage = () => Object.values(K).filter(k=>k!==K.legacyBackup).forEach(k=>localStorage.removeItem(k));
+DATA.replaceState = state => {lastSerialized={};DATA.clearSplitStorage();return DATA.persistSplit(state);};
 
 DATA.load = () => {
   const meta=parse(K.meta,null);
@@ -57,18 +57,15 @@ DATA.load = () => {
     state.settings.weeklySavingsOverrides ||= {};remember(state);return state;
   }
 
-  // If the marker was explicitly removed (Reset V6), clear stale split blocks before rebuilding from V5.
   const staleSplit=[K.sessions,K.uber,K.deliveroo,K.tips,K.plans,K.weather,K.settings].some(k=>localStorage.getItem(k)!==null);
   if(staleSplit)DATA.clearSplitStorage();
 
-  // First V6 split migration: temporarily restore the original unified key for the existing loader.
   DATA.KEY=legacyUnifiedKey;
   const unifiedRaw=localStorage.getItem(legacyUnifiedKey);
   const state=originalLoad();
   DATA.KEY=K.meta;
   if(unifiedRaw && localStorage.getItem(K.legacyBackup)==null)localStorage.setItem(K.legacyBackup,unifiedRaw);
   DATA.persistSplit(state);remember(state);
-  // The split store is now canonical. Keep only the explicit backup copy of the old development blob.
   localStorage.removeItem(legacyUnifiedKey);
   return state;
 };
