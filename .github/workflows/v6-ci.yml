@@ -27,6 +27,7 @@ jobs:
           node --check v6/driveflow-v6-data-integrity.js
           node --check v6/driveflow-v6-weather-validation.js
           node --check v6/driveflow-v6-app.js
+          node --check v6/driveflow-v6-write-ui.js
           node --check v6/driveflow-v6-sw.js
       - name: Business logic smoke tests
         run: node v6/test-driveflow-v6.js
@@ -35,6 +36,7 @@ jobs:
       - name: Verify V6 app references
         run: |
           grep -q 'driveflow-v6-app.js' v6/index.html
+          grep -q 'driveflow-v6-write-ui.js' v6/index.html
           grep -q 'driveflow-v6-data.js' v6/index.html
           grep -q 'driveflow-v6-persistence.js' v6/index.html
           grep -q 'driveflow-v6-data-integrity.js' v6/index.html
