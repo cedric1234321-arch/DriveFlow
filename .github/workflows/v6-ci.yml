@@ -25,6 +25,7 @@ jobs:
           node --check v6/driveflow-v6-io.js
           node --check v6/driveflow-v6-data.js
           node --check v6/driveflow-v6-persistence.js
+          node --check v6/driveflow-v6-fuel.js
           node --check v6/driveflow-v6-data-integrity.js
           node --check v6/driveflow-v6-weather-validation.js
           node --check v6/driveflow-v6-app.js
@@ -33,6 +34,8 @@ jobs:
           node --check v6/driveflow-v6-classifier-ui.js
           node --check v6/driveflow-v6-analytics-ui.js
           node --check v6/driveflow-v6-sw.js
+          python -m py_compile tools/build_montpellier_fuel_history.py
+          python -m json.tool v6/fuel-history-montpellier.json >/dev/null
       - name: Business logic smoke tests
         run: node v6/test-driveflow-v6.js
       - name: Persistence and data regression tests
@@ -41,6 +44,7 @@ jobs:
         run: |
           grep -q 'driveflow-v6-app.js' v6/index.html
           grep -q 'driveflow-v6-planner.js' v6/index.html
+          grep -q 'driveflow-v6-fuel.js' v6/index.html
           grep -q 'driveflow-v6-ui-guards.js' v6/index.html
           grep -q 'driveflow-v6-write-ui.js' v6/index.html
           grep -q 'driveflow-v6-classifier-ui.js' v6/index.html
