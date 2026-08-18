@@ -5,24 +5,37 @@ const DATA=globalThis.DriveFlowV6Data, DF=globalThis.DriveFlowV6Core;
 if(!DATA||!DF)return;
 const FUEL={};
 FUEL.FILE="fuel-history-montpellier.json";
+FUEL.CACHE_KEY="driveflow.v6.officialFuelHistory";
 FUEL.map=new Map();
 FUEL.loaded=false;
 FUEL.meta={status:"not_loaded"};
-
+FUEL.signature=days=>`${days.length}|${days[0]?.date||""}|${days.at(-1)?.date||""}|${days.at(-1)?.pricePerL||""}`;
+FUEL.applyDays=(days,meta={})=>{
+  FUEL.map.clear();for(const d of days||[])if(d?.date&&DF.n(d.pricePerL)>0)FUEL.map.set(d.date,{pricePerL:DF.n(d.pricePerL),stations:DF.n(d.stations),confidence:d.confidence||"unknown"});
+  FUEL.loaded=true;FUEL.meta={status:FUEL.map.size?"ready":"pending",rows:FUEL.map.size,signature:FUEL.signature(days||[]),...meta};return FUEL.meta;
+};
+FUEL.readCache=()=>{try{const x=JSON.parse(localStorage.getItem(FUEL.CACHE_KEY)||"null");if(x?.schemaVersion===1&&Array.isArray(x.days)&&x.days.length)FUEL.applyDays(x.days,{source:x.source||"cached official series",period:x.period||null,location:x.location||null,cached:true});}catch{}};
 FUEL.priceForDate=date=>FUEL.map.get(String(date))||null;
 FUEL.load=async()=>{
+  const before=FUEL.meta.signature||"";
   try{
     const res=await fetch(FUEL.FILE,{cache:"no-store"});if(!res.ok)throw new Error(`HTTP ${res.status}`);
-    const json=await res.json(),days=Array.isArray(json.days)?json.days:[];FUEL.map.clear();
-    for(const d of days)if(d?.date&&DF.n(d.pricePerL)>0)FUEL.map.set(d.date,{pricePerL:DF.n(d.pricePerL),stations:DF.n(d.stations),confidence:d.confidence||"unknown"});
-    FUEL.loaded=true;FUEL.meta={status:FUEL.map.size?"ready":"pending",rows:FUEL.map.size,source:json.source||"",period:json.period||null,location:json.location||null};
+    const json=await res.json(),days=Array.isArray(json.days)?json.days:[],sig=FUEL.signature(days);
+    if(days.some(d=>DF.n(d?.pricePerL)>0)){
+      localStorage.setItem(FUEL.CACHE_KEY,JSON.stringify({schemaVersion:1,source:json.source||"",period:json.period||null,location:json.location||null,days}));
+      FUEL.applyDays(days,{source:json.source||"",period:json.period||null,location:json.location||null,cached:false});
+      if(before!==sig&&typeof window!=="undefined"){
+        const key=`driveflow.fuel.reloaded.${sig}`;
+        if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,"1");location.reload();}
+      }
+    }else if(!FUEL.map.size){FUEL.meta={status:"pending",rows:0,signature:sig,source:json.source||""};}
     return FUEL.meta;
-  }catch(e){FUEL.meta={status:"error",error:String(e.message||e)};return FUEL.meta;}
+  }catch(e){if(FUEL.map.size)return{...FUEL.meta,status:"ready_cached",error:String(e.message||e)};FUEL.meta={status:"error",error:String(e.message||e)};return FUEL.meta;}
 };
 
-// Official local prices supersede the old V5 approximate 1.70 €/L snapshot when
-// an exact date is available. If no official row exists, all previous V6
-// fallback behavior (session snapshot / manual effective-dated price) remains.
+// Make cached official prices available synchronously before the first V6 render.
+FUEL.readCache();
+
 const originalSessionFuel=DATA.sessionFuel.bind(DATA);
 DATA.sessionFuel=(state,s,distance)=>{
   const local=FUEL.priceForDate(s?.date);
@@ -38,7 +51,5 @@ DATA.fuelPriceForDate=(state,date,session=null)=>{
 };
 
 globalThis.DriveFlowV6Fuel=FUEL;
-// Load asynchronously. The app remains usable immediately; once real derived
-// data replaces the placeholder, a reload makes the official series active.
 FUEL.load();
 })();
