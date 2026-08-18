@@ -5,9 +5,6 @@ if(!DATA||!DF)return;
 
 const hasFinite = v => v!==null && v!==undefined && v!=="" && Number.isFinite(Number(v));
 
-// Fold V5 manual pause ranges into V6 active-duration calculations when no
-// permanent historical pause total is stored on the session. Cleared historical
-// minute fields must fall back to the current clock values instead of Number(null)=0.
 DATA.sessionMinutes = s => {
   let a=null,b=null;
   if(hasFinite(s?.historyStartMinute))a=Number(s.historyStartMinute);
@@ -23,20 +20,25 @@ DATA.sessionMinutes = s => {
   return Math.max(0,b-a-pauses);
 };
 
-// A cash tip must never silently disappear if its session is deleted. When a
-// session is removed, IO detaches the tip; this wrapper keeps the detached tip
-// in that business day's CA (without creating an order or distance).
-const originalDayMetrics=DATA.dayMetrics.bind(DATA);
+// Match V5's accounting rule at day level: official imports are authoritative
+// for their platform/date whether or not every order is currently assigned to a
+// session. Session assignment affects session detail/time analysis, never CA.
 DATA.dayMetrics=(state,ctx,date)=>{
-  const d=originalDayMetrics(state,ctx,date);if(d._orphanTipsApplied)return d;
-  const orphan=(state.cashTips||[]).filter(t=>t.date===date&&!t.sessionId),extra=orphan.reduce((a,t)=>a+Math.max(0,DF.n(t.amount)),0);
-  if(extra>0){
-    const ur=DF.resolveUrssaf(state.settings,date),extraUr=ur.enabled?extra*ur.rate/100:0;
-    d.ca+=extra;d.cashTips+=extra;d.netAfterFuel+=extra;d.urssaf+=extraUr;d.netFinal+=extra-extraUr;
-    orphan.forEach(t=>{if(t.platform==="uber")d.uber+=DF.n(t.amount);if(t.platform==="deliveroo")d.deliveroo+=DF.n(t.amount);});
-    d.hourlyGross=d.hours?d.ca/d.hours:0;d.hourlyNet=d.hours?d.netFinal/d.hours:0;
-  }
-  d._orphanTipsApplied=true;return d;
+  const cached=ctx.dayCache.get(date);if(cached?._reconciledV6)return cached;
+  const ss=(ctx.indexes.sessionsByDate.get(date)||[]).slice(),sm=ss.map(s=>DATA.sessionMetrics(state,ctx,s));
+  const ubAll=ctx.indexes.uberByDate.get(date)||[],dlAll=ctx.indexes.deliverooByDate.get(date)||[],tips=ctx.indexes.cashTipsByDate.get(date)||[];
+  const officialUber=DATA.uberOfficialDate(state,date),officialDeliveroo=dlAll.length>0;
+  const manualUber=ss.reduce((a,s)=>a+Math.max(0,DF.n(s.manualUber)),0),manualDel=ss.reduce((a,s)=>a+Math.max(0,DF.n(s.manualDeliveroo)),0);
+  const manualUberOrders=ss.reduce((a,s)=>a+Math.max(0,DF.n(s.manualUberOrders)),0),manualDelOrders=ss.reduce((a,s)=>a+Math.max(0,DF.n(s.manualDeliverooOrders)),0);
+  let uber=officialUber?ubAll.reduce((a,x)=>a+DF.n(x.total),0):manualUber;
+  let deliveroo=officialDeliveroo?dlAll.reduce((a,x)=>a+DF.n(x.earnings),0):manualDel;
+  const uberOrders=officialUber?ubAll.reduce((a,x)=>a+Math.max(0,DF.n(x.orderCount)),0):manualUberOrders;
+  const delOrders=officialDeliveroo?dlAll.reduce((a,x)=>a+Math.max(0,DF.n(x.orderCount)),0):manualDelOrders;
+  let cashTips=0;for(const t of tips){const amount=Math.max(0,DF.n(t.amount));cashTips+=amount;if(t.platform==="uber")uber+=amount;else if(t.platform==="deliveroo")deliveroo+=amount;}
+  const mins=sm.reduce((a,x)=>a+DF.n(x.mins),0),distance=sm.reduce((a,x)=>a+DF.n(x.distance),0),fuel=sm.reduce((a,x)=>a+DF.n(x.fuel),0),ca=uber+deliveroo;
+  const ur=DF.resolveUrssaf(state.settings,date),urssaf=ur.enabled?ca*ur.rate/100:0,netAfterFuel=ca-fuel,netFinal=netAfterFuel-urssaf;
+  const out={date,sessions:ss,ca,orders:uberOrders+delOrders,mins,distance,fuel,urssaf,netAfterFuel,netFinal,uber,deliveroo,cashTips,officialUber,officialDeliveroo,_reconciledV6:true};
+  out.hours=mins/60;out.hourlyGross=out.hours?ca/out.hours:0;out.hourlyNet=out.hours?netFinal/out.hours:0;ctx.dayCache.set(date,out);return out;
 };
 
 DATA.auditState = state => {
