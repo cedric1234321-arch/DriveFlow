@@ -4,6 +4,7 @@
 /* DriveFlow V6 data layer
    - Safe copy-once migration from V5 localStorage
    - Indexed session/day calculations
+   - Official imported revenue assignment without full-array rescans
    - Analytics rows for DriveFlow Intelligence
    - Optional Open-Meteo enrichment (historical + forecast)
 */
@@ -94,15 +95,45 @@ DATA.load = () => {
   const empty=DATA.emptyState(); DATA.save(empty); return empty;
 };
 
-DATA.buildContext = state => ({ indexes:DF.buildIndexes(state), dayCache:new Map(), analyticCache:null });
+DATA.buildContext = state => ({ indexes:DF.buildIndexes(state), dayCache:new Map(), analyticCache:null, sessionRecordCache:new Map() });
 DATA.cashTipsForSession = (ctx,id) => ctx.indexes.cashTipsBySession.get(id)||[];
+
+DATA.sessionBounds = s => {
+  if(s.historyStartTimestamp&&s.historyEndTimestamp) return {start:String(s.historyStartTimestamp).replace(" ","T").slice(0,16),end:String(s.historyEndTimestamp).replace(" ","T").slice(0,16)};
+  if(!s.date||!s.start||!s.end)return null;
+  const d=DATA.parseDate(s.date),sm=DATA.businessMinute(s.start),em=DATA.businessMinute(s.end); if(sm==null||em==null)return null;
+  const make=(businessMin)=>{
+    const absolute=(businessMin+240)%1440,offset=businessMin+240>=1440?1:0,dd=DATA.addDays(d,offset);
+    return `${DATA.iso(dd)}T${DATA.pad(Math.floor(absolute/60))}:${DATA.pad(absolute%60)}`;
+  };
+  return {start:make(sm),end:make(em)};
+};
+DATA.recordTimestamp = r => String(r?.timestamp||"").replace(" ","T").slice(0,16);
+DATA.recordsForSession = (ctx,s,platform) => {
+  const cacheKey=`${platform}:${s.id}`; if(ctx.sessionRecordCache.has(cacheKey))return ctx.sessionRecordCache.get(cacheKey);
+  const source=platform==="uber"?ctx.indexes.uberByDate:ctx.indexes.deliverooByDate,rows=source.get(s.date)||[],bounds=DATA.sessionBounds(s);
+  const matched=rows.filter(r=>{
+    if(r.manualSessionId)return r.manualSessionId===s.id;
+    if(!bounds)return false;
+    const t=DATA.recordTimestamp(r); return !!t&&t>=bounds.start&&t<=bounds.end;
+  });
+  ctx.sessionRecordCache.set(cacheKey,matched);return matched;
+};
+DATA.uberOfficialDate = (state,date) => {
+  const x=state.settings?.uberImport||{}; return !!(x.minDate&&x.maxDate&&date>=x.minDate&&date<=x.maxDate);
+};
 DATA.sessionRevenue = (state,ctx,s) => {
   let base=0,orders=0,uber=0,deliveroo=0;
   if(s.historyImported && Number.isFinite(Number(s.historyExpectedEarnings))){
     base=Math.max(0,DF.n(s.historyExpectedEarnings)); orders=Math.max(0,DF.n(s.historyExpectedOrders));
   } else {
-    uber=Math.max(0,DF.n(s.manualUber)); deliveroo=Math.max(0,DF.n(s.manualDeliveroo));
-    base=uber+deliveroo; orders=Math.max(0,DF.n(s.manualUberOrders))+Math.max(0,DF.n(s.manualDeliverooOrders));
+    const ub=DATA.recordsForSession(ctx,s,"uber"),dl=DATA.recordsForSession(ctx,s,"deliveroo");
+    const officialUber=DATA.uberOfficialDate(state,s.date)||ub.length>0,officialDeliveroo=dl.length>0;
+    uber=officialUber?ub.reduce((a,x)=>a+DF.n(x.total),0):Math.max(0,DF.n(s.manualUber));
+    deliveroo=officialDeliveroo?dl.reduce((a,x)=>a+DF.n(x.earnings),0):Math.max(0,DF.n(s.manualDeliveroo));
+    const uberOrders=officialUber?ub.reduce((a,x)=>a+Math.max(0,DF.n(x.orderCount)),0):Math.max(0,DF.n(s.manualUberOrders));
+    const delOrders=officialDeliveroo?dl.reduce((a,x)=>a+Math.max(0,DF.n(x.orderCount)),0):Math.max(0,DF.n(s.manualDeliverooOrders));
+    base=uber+deliveroo;orders=uberOrders+delOrders;
   }
   const tips=DATA.cashTipsForSession(ctx,s.id);
   const cash=tips.reduce((a,x)=>a+Math.max(0,DF.n(x.amount)),0);
@@ -144,23 +175,9 @@ DATA.aggregateDates = (state,ctx,dates) => {
   return out;
 };
 
-DATA.sessionBounds = s => {
-  if(s.historyStartTimestamp&&s.historyEndTimestamp) return {start:String(s.historyStartTimestamp).replace(" ","T").slice(0,16),end:String(s.historyEndTimestamp).replace(" ","T").slice(0,16)};
-  if(!s.date||!s.start||!s.end)return null;
-  const d=DATA.parseDate(s.date),sm=DATA.businessMinute(s.start),em=DATA.businessMinute(s.end); if(sm==null||em==null)return null;
-  const base=DATA.addDays(d,sm>=1200?1:0); // business minutes >=20h after 04:00 means next civil day only for 00-04 clocks
-  const make=(businessMin)=>{
-    const absolute=(businessMin+240)%1440,offset=businessMin+240>=1440?1:0,dd=DATA.addDays(d,offset);
-    return `${DATA.iso(dd)}T${DATA.pad(Math.floor(absolute/60))}:${DATA.pad(absolute%60)}`;
-  };
-  return {start:make(sm),end:make(em)};
-};
 DATA.inferSessionCity = (state,ctx,s) => {
-  const rows=ctx.indexes.uberByDate.get(s.date)||[]; if(!rows.length)return "Montpellier";
-  const b=DATA.sessionBounds(s); let matched=rows;
-  if(b)matched=rows.filter(r=>{const t=String(r.timestamp||"").replace(" ","T").slice(0,16);return t>=b.start&&t<=b.end;});
-  if(!matched.length)matched=rows;
-  const counts=new Map(); matched.forEach(r=>{const c=String(r.city||"Montpellier");counts.set(c,(counts.get(c)||0)+Math.max(1,DF.n(r.orderCount)));});
+  const rows=DATA.recordsForSession(ctx,s,"uber"); if(!rows.length)return "Montpellier";
+  const counts=new Map(); rows.forEach(r=>{const c=String(r.city||"Montpellier");counts.set(c,(counts.get(c)||0)+Math.max(1,DF.n(r.orderCount)));});
   return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||"Montpellier";
 };
 DATA.analyticsSessions = (state,ctx) => {
@@ -222,7 +239,8 @@ DATA.attachForecastWeather = async candidates => {
 };
 DATA.enrichHistoricalWeather = async (state,onProgress=()=>{}) => {
   if(!WX||!navigator.onLine)return {status:"offline",count:0};
-  const sessions=(state.sessions||[]).filter(s=>DATA.inferSessionCity(state,DATA.buildContext(state),s).toLowerCase().includes("montpellier"));
+  const weatherCtx=DATA.buildContext(state);
+  const sessions=(state.sessions||[]).filter(s=>DATA.inferSessionCity(state,weatherCtx,s).toLowerCase().includes("montpellier"));
   const pending=sessions.filter(s=>!state.weatherBySessionId?.[s.id]&&DATA.sessionBounds(s)); if(!pending.length)return {status:"complete",count:0};
   const years=[...new Set(pending.map(s=>s.date.slice(0,4)))].sort(); let done=0;
   state.weatherBySessionId ||= {}; state.weatherMeta={...(state.weatherMeta||{}),status:"loading"}; DATA.save(state);
