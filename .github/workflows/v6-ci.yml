@@ -27,12 +27,14 @@ jobs:
           node --check v6/driveflow-v6-persistence.js
           node --check v6/driveflow-v6-fuel.js
           node --check v6/driveflow-v6-data-integrity.js
+          node --check v6/driveflow-v6-savings-compat.js
           node --check v6/driveflow-v6-weather-validation.js
           node --check v6/driveflow-v6-app.js
           node --check v6/driveflow-v6-ui-guards.js
           node --check v6/driveflow-v6-write-ui.js
           node --check v6/driveflow-v6-classifier-ui.js
           node --check v6/driveflow-v6-analytics-ui.js
+          node --check v6/driveflow-v6-fuel-ui.js
           node --check v6/driveflow-v6-sw.js
           python -m py_compile tools/build_montpellier_fuel_history.py
           python -m json.tool v6/fuel-history-montpellier.json >/dev/null
@@ -45,10 +47,12 @@ jobs:
           grep -q 'driveflow-v6-app.js' v6/index.html
           grep -q 'driveflow-v6-planner.js' v6/index.html
           grep -q 'driveflow-v6-fuel.js' v6/index.html
+          grep -q 'driveflow-v6-savings-compat.js' v6/index.html
           grep -q 'driveflow-v6-ui-guards.js' v6/index.html
           grep -q 'driveflow-v6-write-ui.js' v6/index.html
           grep -q 'driveflow-v6-classifier-ui.js' v6/index.html
           grep -q 'driveflow-v6-analytics-ui.js' v6/index.html
+          grep -q 'driveflow-v6-fuel-ui.js' v6/index.html
           grep -q 'driveflow-v6-data.js' v6/index.html
           grep -q 'driveflow-v6-persistence.js' v6/index.html
           grep -q 'driveflow-v6-data-integrity.js' v6/index.html
