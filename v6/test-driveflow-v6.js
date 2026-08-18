@@ -1,6 +1,7 @@
 const assert = require('assert');
 const DF = require('./driveflow-v6-core.js');
 const INT = require('./driveflow-v6-intelligence.js');
+const PLAN = require('./driveflow-v6-planner.js');
 const BT = require('./driveflow-v6-backtest.js');
 const IO = require('./driveflow-v6-io.js');
 
@@ -73,6 +74,7 @@ const plan=INT.planWeek({
   targetProbability:.60,
   simulationRuns:300
 });
+assert.equal(plan.optimizer,'beam-v1');
 assert(plan.selected.length>0);
 assert(plan.expectedCa>0);
 assert(plan.simulationRuns>=100);
@@ -80,6 +82,7 @@ assert(plan.caGoalProbability>=0 && plan.caGoalProbability<=1);
 assert(plan.savingsGoalProbability>=0 && plan.savingsGoalProbability<=1);
 for(let i=0;i<plan.selected.length;i++)for(let j=i+1;j<plan.selected.length;j++)assert.equal(INT.candidatesOverlap(plan.selected[i],plan.selected[j]),false,'planner selected overlapping sessions');
 assert(plan.caRange.low<=plan.caRange.median && plan.caRange.median<=plan.caRange.high);
+assert(PLAN.dayOptions(candidates.map(c=>({...c,forecast:{expectedCa:40,netFinal:35}}))).size>0);
 
 // CSV and session safety.
 const csv='date;time;earnings;order_count;merchant\n18/08/2026;19:30;8,50;2;Test Food';
