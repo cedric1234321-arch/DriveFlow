@@ -32,12 +32,18 @@ MIG.parseCashTipsFromNote = (session) => {
 
 MIG.migrateBackupV5ToV6 = (backup, migrationDate = "2026-08-18") => {
   if (!backup || !Array.isArray(backup.sessions)) throw new Error("Sauvegarde DriveFlow invalide");
+  const sessions = backup.sessions.map(s => ({ ...s }));
+  // V5 had one global fuel setting. Historical-import sessions already carry their
+  // own snapshots, so the safest migration is to apply the V5 global value from
+  // the first non-historical session onward rather than only from migration day.
+  const firstCurrentEraDate = sessions
+    .filter(s => s?.date && s.historyImported !== true && s.autoHistorical !== true)
+    .map(s => s.date).sort()[0] || migrationDate;
   const settings = DF.migrateSettingsV5ToV6(backup.settings || {});
-  settings.fuelPriceHistory[0].effectiveFrom = migrationDate;
-  settings.consumptionHistory[0].effectiveFrom = migrationDate;
+  settings.fuelPriceHistory[0].effectiveFrom = firstCurrentEraDate;
+  settings.consumptionHistory[0].effectiveFrom = firstCurrentEraDate;
   settings.dailySavingsOverrides = { ...(backup.settings?.goalOverrides || {}) };
 
-  const sessions = backup.sessions.map(s => ({ ...s }));
   const cashTips = sessions.flatMap(MIG.parseCashTipsFromNote);
 
   return {
@@ -62,7 +68,8 @@ MIG.auditMigration = (before, after) => ({
   deliverooBefore: before?.deliverooOrders?.length || 0,
   deliverooAfter: after?.deliverooOrders?.length || 0,
   cashTipsCreated: after?.cashTips?.length || 0,
-  cashTipsAmount: DF.round2((after?.cashTips || []).reduce((a,x)=>a+DF.n(x.amount),0))
+  cashTipsAmount: DF.round2((after?.cashTips || []).reduce((a,x)=>a+DF.n(x.amount),0)),
+  fuelSettingsEffectiveFrom: after?.settings?.fuelPriceHistory?.[0]?.effectiveFrom || null
 });
 
 if (typeof module !== "undefined" && module.exports) module.exports = MIG;
