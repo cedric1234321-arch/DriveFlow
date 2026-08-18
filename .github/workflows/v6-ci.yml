@@ -21,6 +21,7 @@ jobs:
           node --check v6/driveflow-v6-weather.js
           node --check v6/driveflow-v6-intelligence.js
           node --check v6/driveflow-v6-planner.js
+          node --check v6/driveflow-v6-intelligence-policy.js
           node --check v6/driveflow-v6-backtest.js
           node --check v6/driveflow-v6-io.js
           node --check v6/driveflow-v6-data.js
@@ -46,6 +47,7 @@ jobs:
         run: |
           grep -q 'driveflow-v6-app.js' v6/index.html
           grep -q 'driveflow-v6-planner.js' v6/index.html
+          grep -q 'driveflow-v6-intelligence-policy.js' v6/index.html
           grep -q 'driveflow-v6-fuel.js' v6/index.html
           grep -q 'driveflow-v6-savings-compat.js' v6/index.html
           grep -q 'driveflow-v6-ui-guards.js' v6/index.html
