@@ -20,7 +20,9 @@ jobs:
           node --check v6/driveflow-v6-migration.js
           node --check v6/driveflow-v6-weather.js
           node --check v6/driveflow-v6-intelligence.js
+          node --check v6/driveflow-v6-backtest.js
           node --check v6/driveflow-v6-data.js
+          node --check v6/driveflow-v6-weather-validation.js
           node --check v6/driveflow-v6-app.js
           node --check v6/driveflow-v6-sw.js
       - name: Business logic smoke tests
@@ -30,3 +32,6 @@ jobs:
           grep -q 'driveflow-v6-app.js' v6/index.html
           grep -q 'driveflow-v6-data.js' v6/index.html
           grep -q 'driveflow-v6-intelligence.js' v6/index.html
+          grep -q 'driveflow-v6-backtest.js' v6/index.html
+          grep -q 'driveflow-v6-weather-validation.js' v6/index.html
+          grep -q 'driveflow-v6-light.css' v6/index.html
