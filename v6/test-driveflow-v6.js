@@ -2,6 +2,7 @@ const assert = require('assert');
 const DF = require('./driveflow-v6-core.js');
 const INT = require('./driveflow-v6-intelligence.js');
 const PLAN = require('./driveflow-v6-planner.js');
+const POLICY = require('./driveflow-v6-intelligence-policy.js');
 const BT = require('./driveflow-v6-backtest.js');
 const IO = require('./driveflow-v6-io.js');
 
@@ -46,6 +47,19 @@ const forecast=INT.forecastSession(sessions,target,financialContext);
 assert.equal(forecast.status,'ok');
 assert(forecast.expectedCa>30 && forecast.expectedCa<70);
 assert(forecast.netFinal<forecast.netAfterFuel);
+assert(POLICY.WINDOWS.some(w=>w.label===forecast.analysisWindowLabel) || forecast.analysisWindowLabel==='historique complet');
+assert(forecast.analysisRows<=sessions.length);
+
+// Sparse recent data should expand beyond the first 3-month window instead of
+// pretending the short sample is reliable.
+const longHistory=[];
+for(let i=0;i<220;i++){
+  longHistory.push({id:`lh${i}`,dateDays:i,weekday:4,startHour:19,hours:3,caHourly:15+(i%3),kmHourly:10,timeQuality:'exact'});
+}
+const sparseTarget={date:'2026-08-22',dateDays:230,weekday:4,startHour:19,hours:3};
+const adaptive=INT.forecastSession(longHistory,sparseTarget,financialContext);
+assert.equal(adaptive.status,'ok');
+assert(['3 mois','6 mois','12 mois','historique complet'].includes(adaptive.analysisWindowLabel));
 
 assert.equal(INT.candidatesOverlap(
   {date:'2026-08-21',startHour:18,hours:3},
