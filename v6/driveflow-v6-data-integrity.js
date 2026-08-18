@@ -3,15 +3,18 @@
 const DATA=globalThis.DriveFlowV6Data, DF=globalThis.DriveFlowV6Core;
 if(!DATA||!DF)return;
 
+const hasFinite = v => v!==null && v!==undefined && v!=="" && Number.isFinite(Number(v));
+
 // Fold V5 manual pause ranges into V6 active-duration calculations when no
-// permanent historical pause total is stored on the session.
+// permanent historical pause total is stored on the session. Cleared historical
+// minute fields must fall back to the current clock values instead of Number(null)=0.
 DATA.sessionMinutes = s => {
   let a=null,b=null;
-  if(Number.isFinite(Number(s?.historyStartMinute)))a=Number(s.historyStartMinute);
-  else if(Number.isFinite(Number(s?.autoStartMinute)))a=Number(s.autoStartMinute);
+  if(hasFinite(s?.historyStartMinute))a=Number(s.historyStartMinute);
+  else if(hasFinite(s?.autoStartMinute))a=Number(s.autoStartMinute);
   else a=DATA.businessMinute(s?.start);
-  if(Number.isFinite(Number(s?.historyEndMinute)))b=Number(s.historyEndMinute);
-  else if(Number.isFinite(Number(s?.autoEndMinute)))b=Number(s.autoEndMinute);
+  if(hasFinite(s?.historyEndMinute))b=Number(s.historyEndMinute);
+  else if(hasFinite(s?.autoEndMinute))b=Number(s.autoEndMinute);
   else b=DATA.businessMinute(s?.end);
   if(a==null||b==null||b<=a)return 0;
   let pauses=0;
