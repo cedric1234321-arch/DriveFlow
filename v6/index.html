@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DriveFlow V6">
+  <link rel="manifest" href="driveflow-v6.webmanifest">
+  <link rel="apple-touch-icon" href="../driveflow-icon-180.png">
+  <link rel="stylesheet" href="driveflow-v6-styles.css?v=6.0.0-dev1">
+  <title>DriveFlow V6</title>
+</head>
+<body>
+  <div id="splash" class="splash">
+    <img src="../driveflow-icon-192.png" alt="">
+    <strong>Drive<span>Flow</span></strong>
+    <small>V6 · Intelligence locale</small>
+  </div>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <button id="brandHome" class="brand" aria-label="Aujourd'hui">
+        <img src="../driveflow-icon-192.png" alt="">
+        <span>Drive<strong>Flow</strong></span>
+      </button>
+      <div class="header-actions">
+        <span id="devBadge" class="dev-badge">V6 DEV</span>
+        <button id="privacyBtn" class="icon-button" aria-label="Masquer les montants">◉</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="todayView" class="view active" data-view="today"></section>
+      <section id="weekView" class="view" data-view="week"></section>
+      <section id="statsView" class="view" data-view="stats"></section>
+      <section id="optimizationView" class="view" data-view="optimization"></section>
+      <section id="settingsView" class="view" data-view="settings"></section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navigation principale">
+      <button class="active" data-nav="today"><span>⌂</span><small>Aujourd’hui</small></button>
+      <button data-nav="week"><span>▣</span><small>Semaine</small></button>
+      <button data-nav="stats"><span>▥</span><small>Stats</small></button>
+      <button data-nav="optimization"><span>⌁</span><small>Optimisation</small></button>
+      <button data-nav="settings"><span>⚙</span><small>Réglages</small></button>
+    </nav>
+  </div>
+
+  <div id="sheetBackdrop" class="sheet-backdrop" hidden></div>
+  <section id="sheet" class="sheet" hidden aria-modal="true" role="dialog">
+    <div class="sheet-handle"></div>
+    <div id="sheetContent"></div>
+  </section>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="driveflow-v6-core.js?v=6.0.0-dev1"></script>
+  <script src="driveflow-v6-migration.js?v=6.0.0-dev1"></script>
+  <script src="driveflow-v6-weather.js?v=6.0.0-dev1"></script>
+  <script src="driveflow-v6-intelligence.js?v=6.0.0-dev1"></script>
+  <script src="driveflow-v6-data.js?v=6.0.0-dev1"></script>
+  <script src="driveflow-v6-app.js?v=6.0.0-dev1"></script>
+</body>
+</html>
