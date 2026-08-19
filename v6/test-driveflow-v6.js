@@ -5,6 +5,7 @@ const PLAN = require('./driveflow-v6-planner.js');
 const POLICY = require('./driveflow-v6-intelligence-policy.js');
 const BT = require('./driveflow-v6-backtest.js');
 const IO = require('./driveflow-v6-io.js');
+const WX = require('./driveflow-v6-weather.js');
 
 const noUrssaf = DF.financialMetrics({ca:100,fuel:15,urssafEnabled:false,urssafRatePct:21.2});
 assert.equal(DF.round2(noUrssaf.netFinal),85);
@@ -109,6 +110,18 @@ assert.equal(state.deliverooOrders.length,1);
 assert.equal(state.deliverooOrders[0].orderCount,2);
 assert.equal(IO.validateSession({id:'x',date:'2026-08-18',start:'18:00',end:'21:00',pauseStart:'',pauseEnd:'',odoStart:100,odoEnd:120},[]),'');
 assert(IO.validateSession({id:'x',date:'2026-08-18',start:'18:00',end:'21:00',pauseStart:'',pauseEnd:'',odoStart:120,odoEnd:100},[]).includes('kilométrage'));
+
+// Short sessions must still receive weather context. Open-Meteo precipitation
+// is a preceding-hour sum, while temperature/wind are instantaneous values.
+const shortWx=WX.aggregateInterval([
+  {time:'2026-08-18T12:00',temperature:20,apparentTemperature:20,precipitation:0,rain:0,weatherCode:2,windSpeed:10,windGusts:20},
+  {time:'2026-08-18T13:00',temperature:22,apparentTemperature:22,precipitation:2,rain:2,weatherCode:61,windSpeed:12,windGusts:24}
+],'2026-08-18T12:10','2026-08-18T12:55');
+assert(shortWx);
+assert(Math.abs(shortWx.hours-.75)<1e-9);
+assert.equal(DF.round2(shortWx.temperatureAvg),20);
+assert.equal(DF.round2(shortWx.precipitationMm),1.5);
+assert(shortWx.rainHours>.7 && shortWx.rainHours<.8);
 
 // Weather ablation: rain has a strong repeatable effect that the base model cannot see.
 const wxRows=[];
