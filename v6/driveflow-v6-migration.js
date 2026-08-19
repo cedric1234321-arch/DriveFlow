@@ -30,9 +30,47 @@ MIG.parseCashTipsFromNote = (session) => {
   }];
 };
 
+MIG.addDaysIso = (date, days) => {
+  const [y,m,d]=String(date||"").split("-").map(Number);
+  if(!y||!m||!d)return String(date||"");
+  const x=new Date(Date.UTC(y,m-1,d+days));
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth()+1).padStart(2,"0")}-${String(x.getUTCDate()).padStart(2,"0")}`;
+};
+MIG.sessionBounds = session => {
+  if(session?.historyStartTimestamp&&session?.historyEndTimestamp){
+    return {start:String(session.historyStartTimestamp).replace("T"," ").slice(0,19),end:String(session.historyEndTimestamp).replace("T"," ").slice(0,19)};
+  }
+  if(!session?.date||!session?.start||!session?.end)return null;
+  const toSeconds=t=>/^\d{1,2}:\d{2}$/.test(String(t))?`${String(t).padStart(5,"0")}:00`:null;
+  const st=toSeconds(session.start),en=toSeconds(session.end);if(!st||!en)return null;
+  const sh=Number(String(session.start).split(":")[0]),eh=Number(String(session.end).split(":")[0]);
+  const startDate=sh<4?MIG.addDaysIso(session.date,1):session.date;
+  let endDate=eh<4?MIG.addDaysIso(session.date,1):session.date;
+  const start=`${startDate} ${st}`;let end=`${endDate} ${en}`;
+  if(end<=start){endDate=MIG.addDaysIso(endDate,1);end=`${endDate} ${en}`;}
+  return {start,end};
+};
+MIG.inferSessionCity = (session, uberBatches) => {
+  const bounds=MIG.sessionBounds(session),counts=new Map();
+  for(const r of uberBatches||[]){
+    let match=r?.manualSessionId===session?.id;
+    if(!match&&bounds&&!r?.manualSessionId){const t=String(r?.timestamp||"").replace("T"," ").slice(0,19);match=!!t&&t>=bounds.start&&t<=bounds.end;}
+    if(!match)continue;
+    const city=String(r?.city||"").trim();if(!city)continue;
+    counts.set(city,(counts.get(city)||0)+Math.max(1,DF.n(r?.orderCount)));
+  }
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
+};
+
 MIG.migrateBackupV5ToV6 = (backup, migrationDate = "2026-08-18") => {
   if (!backup || !Array.isArray(backup.sessions)) throw new Error("Sauvegarde DriveFlow invalide");
-  const sessions = backup.sessions.map(s => ({ ...s }));
+  const uberBatches=Array.isArray(backup.uberBatches)?backup.uberBatches.map(x=>({...x})):[];
+  const sessions = backup.sessions.map(s => {
+    const copy={...s};
+    const city=copy.city||MIG.inferSessionCity(copy,uberBatches);
+    if(city)copy.city=city;
+    return copy;
+  });
   // V5 had one global fuel setting. Historical-import sessions already carry their
   // own snapshots, so the safest migration is to apply the V5 global value from
   // the first non-historical session onward rather than only from migration day.
@@ -52,7 +90,7 @@ MIG.migrateBackupV5ToV6 = (backup, migrationDate = "2026-08-18") => {
     migratedFromVersion: backup.version || 5,
     migratedAt: null,
     sessions,
-    uberBatches: Array.isArray(backup.uberBatches) ? backup.uberBatches.map(x => ({ ...x })) : [],
+    uberBatches,
     deliverooOrders: Array.isArray(backup.deliverooOrders) ? backup.deliverooOrders.map(x => ({ ...x })) : [],
     cashTips,
     weeklyPlans: [],
@@ -69,7 +107,8 @@ MIG.auditMigration = (before, after) => ({
   deliverooAfter: after?.deliverooOrders?.length || 0,
   cashTipsCreated: after?.cashTips?.length || 0,
   cashTipsAmount: DF.round2((after?.cashTips || []).reduce((a,x)=>a+DF.n(x.amount),0)),
-  fuelSettingsEffectiveFrom: after?.settings?.fuelPriceHistory?.[0]?.effectiveFrom || null
+  fuelSettingsEffectiveFrom: after?.settings?.fuelPriceHistory?.[0]?.effectiveFrom || null,
+  cities: (after?.sessions||[]).reduce((acc,s)=>{const c=String(s?.city||"Unknown");acc[c]=(acc[c]||0)+1;return acc;},{})
 });
 
 if (typeof module !== "undefined" && module.exports) module.exports = MIG;
