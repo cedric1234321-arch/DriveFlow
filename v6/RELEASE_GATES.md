@@ -12,8 +12,8 @@
 - [ ] Split V6 persistence survives force-close/reopen and does not rewrite unrelated large data blocks.
 - [ ] Service-worker update from V5→V6 is tested without clearing user data.
 - [ ] Standalone PWA cold start/resume, scrolling and no-zoom gesture behavior are tested on iOS.
-- [ ] Weekly savings overrides are isolated by week and historical V5 daily overrides remain readable.
-- [ ] URSSAF enable/disable and effective dates never alter periods before their effective start.
+- [x] Weekly savings overrides are isolated by week and historical V5 daily overrides remain readable. *(Covered by rule + migration regression tests.)*
+- [x] URSSAF enable/disable and effective dates never alter periods before their effective start. *(Covered by effective-date regression tests.)*
 - [x] Weekly planner never selects overlapping sessions and exposes uncertainty/probabilities.
 - [x] Adaptive Intelligence lookback uses 3 months first and expands to 6/12 months only when needed.
 - [x] Historical weather enrichment completes on the real dataset. *(Validated privately from the supplied Open-Meteo export.)*
