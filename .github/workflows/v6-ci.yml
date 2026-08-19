@@ -39,6 +39,7 @@ jobs:
           node --check v6/driveflow-v6-sw.js
           node --check v6/test-driveflow-v6-migration.js
           node --check v6/test-driveflow-v6-rules.js
+          node --check v6/test-driveflow-v6-io.js
           python -m py_compile tools/build_montpellier_fuel_history.py
           python -m json.tool v6/fuel-history-montpellier.json >/dev/null
       - name: Business logic smoke tests
@@ -47,6 +48,8 @@ jobs:
         run: node v6/test-driveflow-v6-migration.js
       - name: Savings and URSSAF rule tests
         run: node v6/test-driveflow-v6-rules.js
+      - name: IO and backup regression tests
+        run: node v6/test-driveflow-v6-io.js
       - name: Persistence and data regression tests
         run: node v6/test-driveflow-v6-browserless.js
       - name: Verify V6 app references
