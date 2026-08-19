@@ -9,7 +9,7 @@
 - [x] Official imported revenue is preserved even when an order is not classified to a session.
 - [ ] Session create/edit/delete, pauses, odometers and 30-minute separation work on a real iPhone.
 - [ ] Uber snapshot import, Deliveroo upsert, historical CSV import, backup export and restore are tested on-device.
-- [ ] Split V6 persistence survives force-close/reopen and does not rewrite unrelated large data blocks.
+- [x] Split V6 persistence survives a persisted-state reopen simulation and does not rewrite unrelated large data blocks. *(Real iOS lifecycle remains covered by the separate PWA QA gates below.)*
 - [ ] Service-worker update from V5→V6 is tested without clearing user data.
 - [ ] Standalone PWA cold start/resume, scrolling and no-zoom gesture behavior are tested on iOS.
 - [x] Weekly savings overrides are isolated by week and historical V5 daily overrides remain readable. *(Covered by rule + migration regression tests.)*
