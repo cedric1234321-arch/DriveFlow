@@ -10,6 +10,7 @@ const RULES=globalThis.DriveFlowV6ReviewRules;
 if(!DATA||!INT||!DF||!RULES)return;
 
 const R={optWeekOffset:0,optToken:0,statsToken:0,optHeat:new Map(),optWeatherRows:[],autoWeatherStarted:false};
+R.setText=(el,text)=>{if(el&&el.textContent!==text)el.textContent=text;};
 R.euro=v=>`${DF.n(v).toLocaleString("fr-FR",{maximumFractionDigits:2})} €`;
 R.rate=v=>`${DF.n(v).toLocaleString("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1})} €/h`;
 R.clock=h=>{let hh=Math.floor(DF.n(h))%24,mm=Math.round((DF.n(h)-Math.floor(DF.n(h)))*60);if(mm===60){hh=(hh+1)%24;mm=0;}if(hh<0)hh+=24;return`${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;};
@@ -20,124 +21,106 @@ R.dayMonth=date=>new Intl.DateTimeFormat("fr-FR",{day:"numeric",month:"long"}).f
 R.weekLabel=dates=>`${R.weekDayUpper(dates[0])} ${R.dayMonth(dates[0])} – ${R.weekDayUpper(dates[6])} ${R.dayMonth(dates[6])}`;
 R.weatherIcon=w=>{const c=Number(w?.dominantWeatherCode);if((w?.rainMm||0)>.05||(w?.precipitationMm||0)>.05)return"🌧️";if(c>=95)return"⛈️";if([0,1].includes(c))return"☀️";if(c===2)return"🌤️";if(c===3)return"☁️";return"🌥️";};
 R.daysFrom=(start,count)=>Array.from({length:count},(_,i)=>DATA.iso(DATA.addDays(DATA.parseDate(start),i)));
-R.optDates=offset=>{
-  const base=DATA.nextWeekDates(DATA.businessToday()),shift=Math.max(0,Math.min(3,Number(offset)||0))*7;
-  return base.map(d=>DATA.iso(DATA.addDays(DATA.parseDate(d),shift)));
-};
+R.optDates=offset=>{const base=DATA.nextWeekDates(DATA.businessToday()),shift=Math.max(0,Math.min(3,Number(offset)||0))*7;return base.map(d=>DATA.iso(DATA.addDays(DATA.parseDate(d),shift)));};
 R.metric=(c,netMode)=>netMode?DF.n(c.forecast?.netFinal)/Math.max(.25,DF.n(c.hours)):DF.n(c.forecast?.expectedHourlyCa);
 R.intelligenceOpts=state=>state.weatherMeta?.modelEnabled&&WX?.similarity?{weatherSimilarity:WX.similarity}:{};
 
-/* Directional savings carry: an earlier surplus may fund a later target, never the reverse. */
+/* Earlier surplus may help a later day; later surplus never repairs an earlier miss. */
 R.patchSavings=()=>{
-  if(DATA.__reviewSavingsPatched)return;
-  DATA.__reviewSavingsPatched=true;
+  if(DATA.__reviewSavingsPatched)return;DATA.__reviewSavingsPatched=true;
   const previous=DATA.aggregateDates.bind(DATA);
   DATA.aggregateDates=(state,ctx,dates)=>{
     const out=previous(state,ctx,dates),first=dates?.[0];if(!first)return out;
     const rule=DF.resolveSavingsRule({defaultRule:state.settings?.defaultSavingsRule,weeklyOverrides:state.settings?.weeklySavingsOverrides},first);
     if(rule.mode!=="fixed_daily")return out;
-    const by={};
-    (dates||[]).forEach(date=>{const d=DATA.dayMetrics(state,ctx,date);by[date]={netFinal:d.netFinal,ca:d.ca,worked:!!(d.sessions?.length||d.ca)};});
-    const schedule=RULES.dailySavingsSchedule({dates,daysByDate:by,rule,dailyOverrides:state.settings?.dailySavingsOverrides||{}});
-    if(!schedule)return out;
-    out.savingsRule={...rule,directionalCarry:true};
-    out.savingsSchedule=schedule;
+    const by={};(dates||[]).forEach(date=>{const d=DATA.dayMetrics(state,ctx,date);by[date]={netFinal:d.netFinal,ca:d.ca,worked:!!(d.sessions?.length||d.ca)};});
+    const schedule=RULES.dailySavingsSchedule({dates,daysByDate:by,rule,dailyOverrides:state.settings?.dailySavingsOverrides||{}});if(!schedule)return out;
+    out.savingsRule={...rule,directionalCarry:true};out.savingsSchedule=schedule;
     out.savings={target:schedule.target,saved:schedule.saved,remaining:schedule.remaining,availableAfterSavings:Math.max(0,out.netFinal-schedule.saved),reached:schedule.reached,carryForward:schedule.carryForward};
     return out;
   };
 };
 R.daySavingsDetail=(state,date)=>{
-  const dates=DATA.weekDates(date),ctx=DATA.buildContext(state),rule=DF.resolveSavingsRule({defaultRule:state.settings.defaultSavingsRule,weeklyOverrides:state.settings.weeklySavingsOverrides},date);
-  if(rule.mode!=="fixed_daily")return null;
+  const dates=DATA.weekDates(date),ctx=DATA.buildContext(state),rule=DF.resolveSavingsRule({defaultRule:state.settings.defaultSavingsRule,weeklyOverrides:state.settings.weeklySavingsOverrides},date);if(rule.mode!=="fixed_daily")return null;
   const by={};dates.forEach(d=>{const x=DATA.dayMetrics(state,ctx,d);by[d]={netFinal:x.netFinal,ca:x.ca,worked:!!(x.sessions?.length||x.ca)};});
   return RULES.dailySavingsSchedule({dates,daysByDate:by,rule,dailyOverrides:state.settings.dailySavingsOverrides||{}})?.details?.find(x=>x.date===date)||null;
 };
 
+/* Neutralize backend-oriented fuel-source labels while keeping the automatic price logic. */
+R.patchFuelUI=()=>{
+  const F=globalThis.DriveFlowV6FuelUI;if(!F||F.__reviewPatched)return;F.__reviewPatched=true;
+  F.enhanceToday=()=>{const view=document.getElementById("todayView"),line=[...(view?.querySelectorAll(".breakdown .line")||[])].find(x=>/^Carburant/.test(x.querySelector("span")?.textContent||""));if(!line)return;const span=line.querySelector("span"),m=span.textContent.match(/Carburant(?:\s*·\s*([\d.,]+)\s*€\/L)?/);R.setText(span,m?.[1]?`Carburant · ${m[1]} €/L`:"Carburant");};
+  F.enhanceSettings=()=>{const row=document.getElementById("v6FuelHistoryStatus");if(!row)return;R.setText(row.querySelector("strong"),"Prix carburant automatique");R.setText(row.querySelector(".desc"),"Historique intégré");const badge=row.querySelector(".tiny");if(badge)R.setText(badge,"Actif");};
+};
+
 R.addNativeDatePicker=(nav,currentIso,mode)=>{
-  if(!nav||nav.querySelector(".review-date-picker"))return;
-  const center=nav.querySelector(".date-center");if(!center)return;
-  center.style.position="relative";
+  if(!nav||nav.querySelector(".review-date-picker"))return;const center=nav.querySelector(".date-center");if(!center)return;center.style.position="relative";
   const input=document.createElement("input");input.type="date";input.value=currentIso;input.className="review-date-picker";input.setAttribute("aria-label",mode==="day"?"Choisir une date":"Choisir une semaine");
-  input.onchange=()=>{
-    if(!input.value)return;
-    if(mode==="day"){
-      const diff=Math.round((DATA.parseDate(input.value)-DATA.parseDate(currentIso))/86400000);if(!diff)return;
-      const b=nav.querySelector(diff>0?'[data-day="1"]':'[data-day="-1"]');if(b){b.dataset.day=String(diff);b.click();}
-    }else{
-      const target=DATA.startOfWeek(input.value),current=DATA.startOfWeek(currentIso),diff=Math.round((target-current)/86400000);if(!diff)return;
-      const b=nav.querySelector(diff>0?'[data-week="7"]':'[data-week="-7"]');if(b){b.dataset.week=String(diff);b.click();}
-    }
-  };
+  input.onchange=()=>{if(!input.value)return;if(mode==="day"){const diff=Math.round((DATA.parseDate(input.value)-DATA.parseDate(currentIso))/86400000);if(!diff)return;const b=nav.querySelector(diff>0?'[data-day="1"]':'[data-day="-1"]');if(b){b.dataset.day=String(diff);b.click();}}else{const target=DATA.startOfWeek(input.value),current=DATA.startOfWeek(currentIso),diff=Math.round((target-current)/86400000);if(!diff)return;const b=nav.querySelector(diff>0?'[data-week="7"]':'[data-week="-7"]');if(b){b.dataset.week=String(diff);b.click();}}};
   center.appendChild(input);
 };
 
 R.enhanceToday=()=>{
-  const view=document.getElementById("todayView");if(!view)return;
-  const nav=view.querySelector(".date-nav"),small=nav?.querySelector(".date-center small");
+  const view=document.getElementById("todayView");if(!view)return;const nav=view.querySelector(".date-nav"),small=nav?.querySelector(".date-center small");
   const raw=small?.dataset.iso||(/^\d{4}-\d{2}-\d{2}$/.test(small?.textContent?.trim()||"")?small.textContent.trim():null);
-  if(raw){small.dataset.iso=raw;small.textContent=R.dateLong(raw);R.addNativeDatePicker(nav,raw,"day");}
-  const hero=[...view.querySelectorAll(".hero-metric")];
-  const gross=hero.find(x=>x.querySelector(".label")?.textContent.trim()==="CA brut");if(gross)gross.querySelector("small").textContent="Uber + Deliveroo";
-  const net=hero.find(x=>/^Net/.test(x.querySelector(".label")?.textContent.trim()||""));if(net)net.querySelector("small").textContent="Charges déduites";
-  const fuel=[...view.querySelectorAll(".breakdown .line")].find(x=>/^Carburant/.test(x.querySelector("span")?.textContent||""));
-  if(fuel){const span=fuel.querySelector("span"),m=span.textContent.match(/Carburant(?:\s*·\s*([\d.,]+)\s*€\/L)?/);span.textContent=m?.[1]?`Carburant · ${m[1]} €/L`:"Carburant";}
-  const manage=view.querySelector("#v6ManageSessions");if(manage)manage.textContent="Créer / gérer";
-  if(raw){
-    const state=DATA.load(),detail=R.daySavingsDetail(state,raw),label=[...view.querySelectorAll(".label")].find(x=>x.textContent.trim()==="Épargne réalisée");
-    if(detail&&label){const card=label.closest(".metric-card"),strong=card?.querySelector("strong"),tiny=card?.querySelector("small");if(strong)strong.textContent=R.euro(detail.credited);if(tiny)tiny.textContent=`Objectif ${R.euro(detail.target)}${detail.carryIn>0?` · ${R.euro(detail.carryIn)} reportés`:""}`;}
-  }
+  if(raw){small.dataset.iso=raw;R.setText(small,R.dateLong(raw));R.addNativeDatePicker(nav,raw,"day");}
+  const hero=[...view.querySelectorAll(".hero-metric")],gross=hero.find(x=>x.querySelector(".label")?.textContent.trim()==="CA brut"),net=hero.find(x=>/^Net/.test(x.querySelector(".label")?.textContent.trim()||""));
+  if(gross)R.setText(gross.querySelector("small"),"Uber + Deliveroo");if(net)R.setText(net.querySelector("small"),"Charges déduites");
+  const manage=view.querySelector("#v6ManageSessions");if(manage)R.setText(manage,"Créer / gérer");
+  globalThis.DriveFlowV6FuelUI?.enhanceToday?.();
+  if(raw){const state=DATA.load(),detail=R.daySavingsDetail(state,raw),label=[...view.querySelectorAll(".label")].find(x=>x.textContent.trim()==="Épargne réalisée");if(detail&&label){const card=label.closest(".metric-card"),strong=card?.querySelector("strong"),tiny=card?.querySelector("small");R.setText(strong,R.euro(detail.credited));R.setText(tiny,`Objectif ${R.euro(detail.target)}${detail.carryIn>0?` · ${R.euro(detail.carryIn)} reportés`:""}`);}}
 };
 
 R.renderWeekChart=(view,start)=>{
-  const chart=view.querySelector(".mini-chart");if(!chart||chart.dataset.reviewGrouped)return;
+  const chart=view.querySelector(".mini-chart");if(!chart)return;const parent=chart.parentElement;if(!parent||parent.dataset.reviewGrouped)return;parent.dataset.reviewGrouped="1";
   const state=DATA.load(),ctx=DATA.buildContext(state),dates=DATA.weekDates(start),vals=dates.map(d=>DATA.dayMetrics(state,ctx,d)),max=Math.max(1,...vals.flatMap(x=>[x.ca,x.netFinal]));
-  const parent=chart.parentElement;if(!parent)return;
   parent.innerHTML=`<div class="review-chart-legend"><span><i class="review-dot gross"></i>Brut</span><span><i class="review-dot net"></i>Net</span></div><div class="review-week-bars">${vals.map((d,i)=>`<div class="review-day-bars"><div class="review-bar-pair"><i class="bar" style="height:${Math.max(3,d.ca/max*100)}%"></i><i class="bar net" style="height:${Math.max(3,d.netFinal/max*100)}%"></i></div><small>${new Intl.DateTimeFormat("fr-FR",{weekday:"short"}).format(DATA.parseDate(dates[i]))}</small></div>`).join("")}</div>`;
 };
+R.enhanceWeekSavings=(view,start)=>{
+  const state=DATA.load(),ctx=DATA.buildContext(state),dates=DATA.weekDates(start),a=DATA.aggregateDates(state,ctx,dates),label=[...view.querySelectorAll(".label")].find(x=>x.textContent.trim()==="Épargne"),card=label?.closest(".card");if(!card)return;
+  R.setText(card.querySelector("strong.value"),R.euro(a.savings.saved));R.setText(card.querySelector("span.muted"),`/ ${R.euro(a.savings.target)}`);
+  const progress=card.querySelector(".progress>div");if(progress)progress.style.width=`${Math.min(100,a.savings.target?a.savings.saved/a.savings.target*100:0)}%`;
+  const bottom=[...card.querySelectorAll(".row.tiny span")];if(bottom[1])R.setText(bottom[1],`Reste ${R.euro(a.savings.remaining)}`);
+  if(bottom[0]&&a.savingsRule?.mode==="fixed_daily")R.setText(bottom[0],`${R.euro(a.savingsRule.value)} / jour · report uniquement vers les jours suivants`);
+};
 R.enhanceWeek=()=>{
-  const view=document.getElementById("weekView");if(!view)return;
-  const nav=view.querySelector(".date-nav"),strong=nav?.querySelector(".date-center strong"),small=nav?.querySelector(".date-center small");
-  let start=nav?.dataset.weekStart||null;
+  const view=document.getElementById("weekView");if(!view)return;const nav=view.querySelector(".date-nav"),strong=nav?.querySelector(".date-center strong"),small=nav?.querySelector(".date-center small");let start=nav?.dataset.weekStart||null;
   if(!start){const m=strong?.textContent.match(/(\d{4}-\d{2}-\d{2})/);start=m?.[1]||null;if(start)nav.dataset.weekStart=start;}
-  if(start){const dates=DATA.weekDates(start);if(strong)strong.textContent=R.weekLabel(dates);if(small)small.textContent=RULES.isoWeekDisplay(DF.isoWeekKey(dates[0]));R.addNativeDatePicker(nav,start,"week");R.renderWeekChart(view,start);}
+  if(!start)return;const dates=DATA.weekDates(start);R.setText(strong,R.weekLabel(dates));R.setText(small,RULES.isoWeekDisplay(DF.isoWeekKey(dates[0])));R.addNativeDatePicker(nav,start,"week");R.renderWeekChart(view,start);R.enhanceWeekSavings(view,start);
 };
 
 R.openDailyGoal=()=>{
   if(!W?.open)return;const state=DATA.load(),today=DATA.businessToday();state.settings.dailySavingsOverrides||={};
   const defaultFor=date=>{const rule=DF.resolveSavingsRule({defaultRule:state.settings.defaultSavingsRule,weeklyOverrides:state.settings.weeklySavingsOverrides},date);return rule.mode==="fixed_daily"?DF.n(rule.value):0;};
   const valueFor=date=>Object.prototype.hasOwnProperty.call(state.settings.dailySavingsOverrides,date)?DF.n(state.settings.dailySavingsOverrides[date]):defaultFor(date);
-  W.open(`<h2>Objectif d’épargne par jour</h2><div class="sheet-sub">Ajuste une journée précise. 0 € peut servir à marquer une journée sans objectif. Un surplus d’un jour précédent peut aider un jour suivant, jamais l’inverse.</div><div class="field"><label>Date</label><input id="reviewGoalDate" type="date" value="${today}"></div><div class="field"><label>Objectif du jour</label><input id="reviewGoalValue" type="number" min="0" step="1" value="${valueFor(today)}"></div><button id="reviewGoalSave" class="primary">Enregistrer pour ce jour</button><button id="reviewGoalDefault" class="secondary" style="margin-top:9px">Revenir à la règle par défaut</button><button id="reviewGoalClose" class="secondary" style="margin-top:9px">Fermer</button>`);
+  W.open(`<h2>Objectif d’épargne par jour</h2><div class="sheet-sub">Ajuste une journée précise. 0 € peut marquer une journée sans objectif. Un surplus d’un jour précédent peut aider un jour suivant, jamais l’inverse.</div><div class="field"><label>Date</label><input id="reviewGoalDate" type="date" value="${today}"></div><div class="field"><label>Objectif du jour</label><input id="reviewGoalValue" type="number" min="0" step="1" value="${valueFor(today)}"></div><button id="reviewGoalSave" class="primary">Enregistrer pour ce jour</button><button id="reviewGoalDefault" class="secondary" style="margin-top:9px">Revenir à la règle par défaut</button><button id="reviewGoalClose" class="secondary" style="margin-top:9px">Fermer</button>`);
   const date=document.getElementById("reviewGoalDate"),value=document.getElementById("reviewGoalValue");date.onchange=()=>{value.value=valueFor(date.value);};
   document.getElementById("reviewGoalSave").onclick=()=>{const latest=DATA.load();latest.settings.dailySavingsOverrides||={};latest.settings.dailySavingsOverrides[date.value]=Math.max(0,DF.n(value.value));DATA.save(latest);W.close();location.reload();};
   document.getElementById("reviewGoalDefault").onclick=()=>{const latest=DATA.load();latest.settings.dailySavingsOverrides||={};delete latest.settings.dailySavingsOverrides[date.value];DATA.save(latest);W.close();location.reload();};
   document.getElementById("reviewGoalClose").onclick=W.close;
 };
 R.openDataHub=()=>{
-  if(!W?.open)return;const state=DATA.load(),weather=state.weatherMeta?.status==="complete"?"Synchronisée":"Synchronisation automatique",fuel=globalThis.DriveFlowV6Fuel?.meta?.status?.startsWith?.("ready")?"Actif":"Automatique";
+  if(!W?.open)return;const state=DATA.load(),weather=state.weatherMeta?.status==="complete"?"Synchronisée":"Synchronisation automatique",fuel=String(globalThis.DriveFlowV6Fuel?.meta?.status||"").startsWith("ready")?"Actif":"Automatique";
   W.open(`<h2>Données et activité</h2><div class="sheet-sub">Imports, sauvegardes et gestion de l’activité.</div><section class="subtle-card"><div class="row"><span>Sessions</span><strong>${state.sessions?.length||0}</strong></div><div class="row" style="margin-top:7px"><span>Uber</span><strong>${state.uberBatches?.length||0}</strong></div><div class="row" style="margin-top:7px"><span>Deliveroo</span><strong>${state.deliverooOrders?.length||0}</strong></div></section><div class="section-title"><h2>Activité</h2></div><button id="reviewManageSessions" class="secondary">Créer / gérer les sessions</button><div class="section-title"><h2>Importer</h2></div><div style="display:grid;gap:8px"><button id="reviewUber" class="secondary">Importer Uber CSV</button><button id="reviewDeliveroo" class="secondary">Importer Deliveroo CSV</button><button id="reviewHistory" class="secondary">Importer historique CSV</button></div><div class="section-title"><h2>Sauvegarde</h2></div><div style="display:grid;gap:8px"><button id="reviewExport" class="secondary">Exporter une sauvegarde V6</button><button id="reviewRestore" class="secondary">Restaurer une sauvegarde V5 / V6</button><button id="reviewReset" class="secondary danger">Recréer la copie V6 depuis V5</button></div><div class="section-title"><h2>Automatique</h2></div><section class="subtle-card"><div class="row"><span>Météo</span><strong>${weather}</strong></div><div class="row" style="margin-top:8px"><span>Carburant</span><strong>${fuel}</strong></div></section><button id="reviewDataClose" class="secondary" style="margin-top:12px">Fermer</button>`);
-  const q=id=>document.getElementById(id);q("reviewManageSessions").onclick=()=>W.openManager?.();q("reviewUber").onclick=()=>W.importUber?.();q("reviewDeliveroo").onclick=()=>W.importDeliveroo?.();q("reviewHistory").onclick=()=>W.importHistory?.();
-  q("reviewExport").onclick=()=>globalThis.DriveFlowV6UXPolish?.exportBackup?.();q("reviewRestore").onclick=()=>W.restoreBackup?.();q("reviewReset").onclick=()=>{const b=document.getElementById("resetV6");if(b)b.click();else if(confirm("Recréer uniquement la copie V6 depuis les données V5 ?")){localStorage.removeItem(DATA.KEY);location.reload();}};q("reviewDataClose").onclick=W.close;
+  const q=id=>document.getElementById(id);q("reviewManageSessions").onclick=()=>W.openManager?.();q("reviewUber").onclick=()=>W.importUber?.();q("reviewDeliveroo").onclick=()=>W.importDeliveroo?.();q("reviewHistory").onclick=()=>W.importHistory?.();q("reviewExport").onclick=()=>globalThis.DriveFlowV6UXPolish?.exportBackup?.();q("reviewRestore").onclick=()=>W.restoreBackup?.();q("reviewReset").onclick=()=>{const b=document.getElementById("resetV6");if(b)b.click();else if(confirm("Recréer uniquement la copie V6 depuis les données V5 ?")){localStorage.removeItem(DATA.KEY);location.reload();}};q("reviewDataClose").onclick=W.close;
 };
 R.enhanceSettings=()=>{
   const view=document.getElementById("settingsView");if(!view)return;
-  const weatherCard=[...view.querySelectorAll(".card")].find(c=>/Météo historique Montpellier/.test(c.textContent||""));if(weatherCard)weatherCard.hidden=true;
-  const oldExport=[...view.querySelectorAll(".card")].find(c=>/Exporter une sauvegarde V6/.test(c.textContent||"")&&c.querySelector("#exportV6"));if(oldExport)oldExport.hidden=true;
-  const hub=view.querySelector("#v6DataManagement");if(hub){hub.className="card settings-list";hub.innerHTML=`<button id="reviewDataHub" class="settings-row review-settings-button" type="button"><div style="text-align:left"><strong>Données et activité</strong><div class="desc">Imports, sauvegardes et sessions</div></div><span class="link-button">Ouvrir ›</span></button>`;document.getElementById("reviewDataHub").onclick=R.openDataHub;}
-  if(!view.querySelector("#reviewDailyGoal")){
-    const savings=[...view.querySelectorAll(".card")].find(c=>/Épargne par défaut/.test(c.textContent||""));if(savings){const card=document.createElement("section");card.id="reviewDailyGoal";card.className="card settings-list";card.innerHTML=`<button class="settings-row review-settings-button" type="button"><div style="text-align:left"><strong>Objectifs par jour</strong><div class="desc">Modifier un jour précis ou définir 0 €</div></div><span class="link-button">Modifier ›</span></button>`;savings.after(card);card.querySelector("button").onclick=R.openDailyGoal;}
-  }
-  const fuelRow=view.querySelector("#v6FuelHistoryStatus");if(fuelRow){const s=fuelRow.querySelector("strong"),d=fuelRow.querySelector(".desc");if(s)s.textContent="Prix carburant automatique";if(d)d.textContent="Historique intégré";}
-  const footer=[...view.querySelectorAll(".card.row")].find(c=>/DriveFlow/.test(c.textContent||""));if(footer){const tiny=footer.querySelector(".tiny"),badge=footer.querySelector(".dev-badge");if(tiny)tiny.textContent="V6 Preview · build 20";if(badge)badge.textContent="RC 20";}
+  const weatherCard=[...view.querySelectorAll(".card")].find(c=>/Météo historique Montpellier/.test(c.textContent||""));if(weatherCard&&!weatherCard.hidden)weatherCard.hidden=true;
+  const oldExport=[...view.querySelectorAll(".card")].find(c=>c.querySelector("#exportV6"));if(oldExport&&!oldExport.hidden)oldExport.hidden=true;
+  const hub=view.querySelector("#v6DataManagement");if(hub&&hub.dataset.reviewCompact!=="1"){hub.dataset.reviewCompact="1";hub.className="card settings-list";hub.innerHTML=`<button id="reviewDataHub" class="settings-row review-settings-button" type="button"><div style="text-align:left"><strong>Données et activité</strong><div class="desc">Imports, sauvegardes et sessions</div></div><span class="link-button">Ouvrir ›</span></button>`;hub.querySelector("#reviewDataHub").onclick=R.openDataHub;}
+  if(!view.querySelector("#reviewDailyGoal")){const savings=[...view.querySelectorAll(".card")].find(c=>/Épargne par défaut/.test(c.textContent||""));if(savings){const card=document.createElement("section");card.id="reviewDailyGoal";card.className="card settings-list";card.innerHTML=`<button class="settings-row review-settings-button" type="button"><div style="text-align:left"><strong>Objectifs par jour</strong><div class="desc">Modifier un jour précis ou définir 0 €</div></div><span class="link-button">Modifier ›</span></button>`;savings.after(card);card.querySelector("button").onclick=R.openDailyGoal;}}
+  globalThis.DriveFlowV6FuelUI?.enhanceSettings?.();
+  const footer=[...view.querySelectorAll(".card.row")].find(c=>/DriveFlow/.test(c.textContent||""));if(footer){R.setText(footer.querySelector(".tiny"),"V6 Preview · build 20");R.setText(footer.querySelector(".dev-badge"),"RC 20");}
 };
 
 R.slotHtml=(c,state)=>{const net=state.settings.displayMoneyMode==="net",f=c.forecast,w=c.weather,hourly=R.metric(c,net),amount=net?f.netFinal:f.expectedCa;return`<article class="slot-row"><div class="top"><div><strong>${R.dateShort(c.date)} · ${R.clock(c.startHour)}–${R.clock(c.startHour+c.hours)}</strong><div class="meta"><span class="${net?"blue":"green"}">${R.rate(hourly)}</span><span>≈ ${R.euro(amount)}</span>${w?`<span>${R.weatherIcon(w)} ${w.temperatureAvg!=null?Math.round(w.temperatureAvg)+"°":""}</span>`:""}</div></div><span class="badge ${f.confidence||"low"}">${({high:"Élevée",medium:"Moyenne",low:"Faible",insufficient:"Insuffisante"})[f.confidence]||"—"}</span></div><div class="meta"><span>${Math.round(f.neighbors||0)} observations comparables</span><span>Zone CA ${R.euro(f.lowCa)}–${R.euro(f.highCa)}</span></div></article>`;};
 R.refreshStatsUpcoming=async()=>{
-  const view=document.getElementById("statsView");if(!view)return;const title=[...view.querySelectorAll(".section-title")].find(x=>/Meilleurs créneaux à venir/.test(x.textContent||""));const list=title?.nextElementSibling;if(!title||!list?.classList.contains("slot-list"))return;
-  const tomorrow=DATA.iso(DATA.addDays(DATA.parseDate(DATA.businessToday()),1)),key=`${tomorrow}|${DATA.load().settings.displayMoneyMode}`;if(list.dataset.reviewUpcoming===key)return;list.dataset.reviewUpcoming=key;const token=++R.statsToken;
-  const label=title.querySelector("button")||title.querySelector("span");if(label)label.textContent=`Dès ${R.dateShort(tomorrow)}`;list.innerHTML='<div class="subtle-card muted">Analyse des 7 prochains jours…</div>';
+  const view=document.getElementById("statsView");if(!view)return;const title=[...view.querySelectorAll(".section-title")].find(x=>/Meilleurs créneaux à venir/.test(x.textContent||"")),list=title?.nextElementSibling;if(!title||!list?.classList.contains("slot-list"))return;
+  const tomorrow=DATA.iso(DATA.addDays(DATA.parseDate(DATA.businessToday()),1)),state0=DATA.load(),key=`${tomorrow}|${state0.settings.displayMoneyMode}`;if(list.dataset.reviewUpcoming===key)return;list.dataset.reviewUpcoming=key;const token=++R.statsToken;
+  const label=title.querySelector("button")||title.querySelector("span");R.setText(label,`Dès ${R.dateShort(tomorrow)}`);list.innerHTML='<div class="subtle-card muted">Analyse des 7 prochains jours…</div>';
   let candidates=DATA.defaultCandidates(R.daysFrom(tomorrow,7));candidates=await DATA.attachForecastWeather(candidates);if(token!==R.statsToken||!list.isConnected)return;
-  const state=DATA.load(),ctx=DATA.buildContext(state),rows=INT.scoreCandidates({sessions:DATA.analyticsSessions(state,ctx),candidates,financialContext:state.settings,opts:R.intelligenceOpts(state)}).sort((a,b)=>R.metric(b,state.settings.displayMoneyMode==="net")-R.metric(a,state.settings.displayMoneyMode==="net"));
-  const top=DATA.distinctTop(rows,4);list.innerHTML=top.length?top.map(c=>R.slotHtml(c,state)).join(""):'<div class="subtle-card muted">Pas encore assez de données comparables.</div>';
+  const state=DATA.load(),ctx=DATA.buildContext(state),net=state.settings.displayMoneyMode==="net",rows=INT.scoreCandidates({sessions:DATA.analyticsSessions(state,ctx),candidates,financialContext:state.settings,opts:R.intelligenceOpts(state)}).sort((a,b)=>R.metric(b,net)-R.metric(a,net)),top=DATA.distinctTop(rows,4);list.innerHTML=top.length?top.map(c=>R.slotHtml(c,state)).join(""):'<div class="subtle-card muted">Pas encore assez de données comparables.</div>';
 };
 
 R.fetchForecastRows=async dates=>{try{const WF=globalThis.DriveFlowV6WeatherForecastUI;return WF?.fetch?await WF.fetch(dates):[];}catch{return[];}};
@@ -161,13 +144,11 @@ R.renderOptimization=async(force=false)=>{
   scored.sort((a,b)=>R.metric(b,net)-R.metric(a,net));const top=DATA.distinctTop(scored,4),topBox=document.getElementById("reviewOptTop"),heatBox=document.getElementById("reviewOptHeat"),wxBox=document.getElementById("reviewOptWeather");if(topBox)topBox.innerHTML=top.length?top.map(c=>R.slotHtml(c,fresh)).join(""):'<div class="subtle-card muted">Pas assez de données comparables.</div>';if(heatBox){heatBox.innerHTML=R.heatmapHtml(dates,heatScored);heatBox.querySelectorAll("[data-review-heat]").forEach(b=>b.onclick=()=>R.openHeatDetail(b.dataset.reviewHeat));}if(wxBox)wxBox.innerHTML=R.weatherHtml(dates,weatherRows);
 };
 
-R.autoWeather=()=>{
-  if(R.autoWeatherStarted)return;R.autoWeatherStarted=true;setTimeout(async()=>{try{if(!navigator.onLine)return;const state=DATA.load(),ctx=DATA.buildContext(state),pending=(state.sessions||[]).filter(s=>DATA.inferSessionCity(state,ctx,s).toLowerCase().includes("montpellier")&&!state.weatherBySessionId?.[s.id]&&DATA.sessionBounds(s));if(!pending.length)return;await DATA.enrichHistoricalWeather(state);}catch{}},2600);
-};
+R.autoWeather=()=>{if(R.autoWeatherStarted)return;R.autoWeatherStarted=true;setTimeout(async()=>{try{if(!navigator.onLine)return;const state=DATA.load(),ctx=DATA.buildContext(state),pending=(state.sessions||[]).filter(s=>DATA.inferSessionCity(state,ctx,s).toLowerCase().includes("montpellier")&&!state.weatherBySessionId?.[s.id]&&DATA.sessionBounds(s));if(!pending.length)return;await DATA.enrichHistoricalWeather(state);}catch{}},2600);};
 R.installStyles=()=>{if(document.getElementById("reviewStyles"))return;const s=document.createElement("style");s.id="reviewStyles";s.textContent=`.review-date-picker{position:absolute;inset:0;width:100%;height:100%;opacity:0;z-index:3;cursor:pointer}.review-chart-legend{display:flex;justify-content:flex-end;gap:14px;font-size:11px;color:var(--muted);margin-bottom:8px}.review-chart-legend span{display:flex;align-items:center;gap:5px}.review-dot{width:8px;height:8px;border-radius:50%;display:inline-block}.review-dot.gross{background:var(--green)}.review-dot.net{background:#4db3ff}.review-week-bars{height:130px;display:grid;grid-template-columns:repeat(7,1fr);gap:7px;align-items:end}.review-day-bars{height:100%;display:grid;grid-template-rows:1fr auto;gap:5px;text-align:center;color:var(--muted);font-size:9px}.review-bar-pair{display:flex;align-items:flex-end;justify-content:center;gap:3px;height:100%;border-bottom:1px solid var(--line);padding:0 2px}.review-bar-pair .bar{width:min(12px,42%);flex:none}.review-settings-button{width:100%;border:0;background:none;color:inherit}.review-heatmap{display:grid;gap:4px;font-size:9px}.review-heatmap .h,.review-heatmap .d{display:flex;align-items:center;justify-content:center;color:var(--muted);min-height:27px}.review-heatmap .cell{border:0;min-height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;width:100%;padding:0}.review-heat-red{background:rgba(255,106,114,.36);color:#ffd0d2}.review-heat-orange{background:rgba(255,183,74,.28);color:#ffe1ad}.review-heat-green{background:rgba(54,217,119,.22);color:#a8f7c5}.review-heat-white{background:rgba(255,255,255,.035);color:var(--muted)}.review-heat-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:9px;color:var(--muted);font-size:9px}.review-weather-strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(86px,1fr);gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}.review-weather-strip::-webkit-scrollbar{display:none}`;document.head.appendChild(s);};
 R.enhance=()=>{R.enhanceToday();R.enhanceWeek();R.enhanceSettings();R.refreshStatsUpcoming();R.renderOptimization();};
 
-R.patchSavings();R.installStyles();R.autoWeather();
+R.patchSavings();R.patchFuelUI();R.installStyles();R.autoWeather();if(globalThis.DriveFlowV6UXPolish)globalThis.DriveFlowV6UXPolish.heatTier=RULES.heatTier;
 const observer=new MutationObserver(()=>{clearTimeout(R._t);R._t=setTimeout(R.enhance,95);});observer.observe(document.documentElement,{subtree:true,childList:true});
 R.enhance();
 globalThis.DriveFlowV6LiveReview=R;
