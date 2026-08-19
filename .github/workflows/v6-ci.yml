@@ -2,7 +2,7 @@ name: DriveFlow V6 CI
 
 on:
   push:
-    branches: [v6-development]
+    branches: [v6-development, v6-hotfix-import-planner]
   pull_request:
     branches: [main]
 
@@ -24,6 +24,7 @@ jobs:
           node --check v6/driveflow-v6-intelligence-policy.js
           node --check v6/driveflow-v6-backtest.js
           node --check v6/driveflow-v6-io.js
+          node --check v6/driveflow-v6-backup-compat.js
           node --check v6/driveflow-v6-data.js
           node --check v6/driveflow-v6-persistence.js
           node --check v6/driveflow-v6-fuel.js
@@ -33,6 +34,8 @@ jobs:
           node --check v6/driveflow-v6-app.js
           node --check v6/driveflow-v6-ui-guards.js
           node --check v6/driveflow-v6-write-ui.js
+          node --check v6/driveflow-v6-ios-file-picker.js
+          node --check v6/driveflow-v6-planner-ui.js
           node --check v6/driveflow-v6-classifier-ui.js
           node --check v6/driveflow-v6-analytics-ui.js
           node --check v6/driveflow-v6-fuel-ui.js
@@ -62,11 +65,14 @@ jobs:
         run: |
           grep -q 'driveflow-v6-app.js' v6/index.html
           grep -q 'driveflow-v6-planner.js' v6/index.html
+          grep -q 'driveflow-v6-planner-ui.js' v6/index.html
           grep -q 'driveflow-v6-intelligence-policy.js' v6/index.html
           grep -q 'driveflow-v6-fuel.js' v6/index.html
           grep -q 'driveflow-v6-savings-compat.js' v6/index.html
           grep -q 'driveflow-v6-ui-guards.js' v6/index.html
           grep -q 'driveflow-v6-write-ui.js' v6/index.html
+          grep -q 'driveflow-v6-ios-file-picker.js' v6/index.html
+          grep -q 'driveflow-v6-backup-compat.js' v6/index.html
           grep -q 'driveflow-v6-classifier-ui.js' v6/index.html
           grep -q 'driveflow-v6-analytics-ui.js' v6/index.html
           grep -q 'driveflow-v6-fuel-ui.js' v6/index.html

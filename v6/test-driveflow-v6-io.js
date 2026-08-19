@@ -1,5 +1,6 @@
 const assert=require('assert');
 const IO=require('./driveflow-v6-io.js');
+require('./driveflow-v6-backup-compat.js');
 
 // Session rules: cross-midnight within the 04:00 business day, pauses, odometers and gap.
 const existing=[{id:'a',date:'2026-08-19',start:'18:00',end:'20:00',autoHistorical:false}];
@@ -35,9 +36,25 @@ const histState={sessions:[{id:'history:x',historyImported:true,historySourceId:
 const historyRows=[{session_id:'x',date:'19/08/2026',type:'Soir',start_datetime:'2026-08-19 18:00:00',end_datetime:'2026-08-19 20:00:00',pause_minutes:'0',distance_km:'20',distance_source:'ESTIMATED',confidence:'Estimated'}];
 const hr=IO.importHistoryRows(histState,historyRows);assert.equal(hr.protectedEdits,1);assert.equal(histState.sessions[0].start,'18:10');
 
-// Backup restore is a defensive deep clone and fills optional V6 collections.
+// V6 backup restore is a defensive deep clone and fills optional collections.
 const backup={schemaVersion:6,sessions:[{id:'s'}],uberBatches:[],deliverooOrders:[],settings:{x:1}};
 const restored=IO.restoreBackup(backup);assert.deepEqual(restored.cashTips,[]);assert.deepEqual(restored.weeklyPlans,[]);restored.sessions[0].id='changed';assert.equal(backup.sessions[0].id,'s');
-assert.throws(()=>IO.restoreBackup({schemaVersion:5,sessions:[],uberBatches:[],deliverooOrders:[]}),/invalide/i);
+
+// A backup exported by the current production V5 must restore directly in V6.
+const v5={
+  version:5,
+  sessions:[{id:'v5s',date:'2026-08-18',start:'18:00',end:'20:00',note:'10€ de pourboires Uber en espèces'}],
+  uberBatches:[{id:'u',timestamp:'2026-08-18 19:00:00',businessDate:'2026-08-18',city:'Montpellier',total:20,orderCount:2}],
+  deliverooOrders:[],
+  settings:{defaultGoal:25,fuelConsumption:6,fuelPrice:2.2,goalOverrides:{}}
+};
+const migrated=IO.restoreBackup(v5);
+assert.equal(migrated.schemaVersion,6);
+assert.equal(migrated.sessions.length,1);
+assert.equal(migrated.uberBatches.length,1);
+assert.equal(migrated.cashTips.length,1);
+assert.equal(migrated.cashTips[0].amount,10);
+assert.deepEqual(migrated.weatherBySessionId,{});
+assert.throws(()=>IO.restoreBackup({version:3,sessions:[]}),/non reconnue/i);
 
 console.log('DriveFlow V6 IO regression tests passed');
