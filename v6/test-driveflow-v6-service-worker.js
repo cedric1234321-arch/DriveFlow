@@ -9,7 +9,7 @@ const putCalls=[];
 const cache={addAll:async()=>{},put:async(...args)=>{putCalls.push(args);}};
 const cachesMock={
   open:async()=>cache,
-  keys:async()=>['driveflow-v5-0-0-20260813','driveflow-v6-dev-old','driveflow-v6-dev16-20260819','driveflow-v6-dev17-20260819','driveflow-v6-dev18-20260819','unrelated-cache'],
+  keys:async()=>['driveflow-v5-0-0-20260813','driveflow-v6-dev-old','driveflow-v6-dev16-20260819','driveflow-v6-dev17-20260819','driveflow-v6-dev18-20260819','driveflow-v6-dev19-20260819','unrelated-cache'],
   delete:async key=>{deleted.push(key);return true;},
   match:async()=>null
 };
@@ -29,11 +29,12 @@ assert(listeners.install&&listeners.activate&&listeners.fetch);
   let activation;
   listeners.activate({waitUntil:p=>{activation=p;}});await activation;
   assert(deleted.includes('driveflow-v6-dev-old'));
-  assert(deleted.includes('driveflow-v6-dev16-20260819'),'previous V6 preview cache should be retired');
-  assert(deleted.includes('driveflow-v6-dev17-20260819'),'previous V6 preview cache should be retired');
+  assert(deleted.includes('driveflow-v6-dev16-20260819'));
+  assert(deleted.includes('driveflow-v6-dev17-20260819'));
+  assert(deleted.includes('driveflow-v6-dev18-20260819'));
   assert(!deleted.includes('driveflow-v5-0-0-20260813'),'V6 preview must never delete production V5 cache');
   assert(!deleted.includes('unrelated-cache'));
-  assert(!deleted.includes('driveflow-v6-dev18-20260819'),'current V6 preview cache must be preserved');
+  assert(!deleted.includes('driveflow-v6-dev19-20260819'),'current V6 preview cache must be preserved');
 
   let externalResponded=false;
   listeners.fetch({request:{method:'GET',url:'https://api.open-meteo.com/v1/forecast?x=1',mode:'cors'},respondWith:()=>{externalResponded=true;}});
