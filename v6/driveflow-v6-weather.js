@@ -64,6 +64,40 @@ WX.weightedMode = pairs => {
   return best;
 };
 
+/* Rain is not a binary on/off input for delivery demand. A shower can leave the
+   road wet and the rider supply lower after rain stops. This is deliberately a
+   smooth heuristic, not a claim that wet roads cause a fixed earnings uplift.
+   Historical walk-forward validation still decides whether weather is enabled. */
+WX.rainPersistenceHours = mm => {
+  const x = Math.max(0, Number(mm) || 0);
+  if (x < 0.05) return 0;
+  if (x < 0.20) return 0.65;
+  if (x < 0.80) return 1.0;
+  if (x < 2.0) return 1.4;
+  if (x < 5.0) return 2.0;
+  if (x < 10.0) return 2.7;
+  return 3.5;
+};
+WX.rainImpact = mm => {
+  const x = Math.max(0, Number(mm) || 0);
+  return x > 0 ? Math.min(1.5, Math.log1p(x) / Math.log(4)) : 0;
+};
+WX.wetRoadAt = (rows, minute) => {
+  let best = 0, ageHours = null, sourceRainMm = 0, persistenceHours = 0;
+  for (const row of rows || []) {
+    const t = WX.localMinute(row.time);
+    if (t == null || t > minute || t < minute - 5 * 60) continue;
+    const mm = Math.max(Number(row.rain) || 0, Number(row.precipitation) || 0);
+    if (!(mm >= 0.05)) continue;
+    const lag = Math.max(0, (minute - t) / 60), tau = WX.rainPersistenceHours(mm);
+    const score = WX.rainImpact(mm) * Math.exp(-lag / Math.max(0.25, tau));
+    if (score > best) {
+      best = score; ageHours = lag; sourceRainMm = mm; persistenceHours = tau;
+    }
+  }
+  return { score: Math.min(1.5, best), ageHours, sourceRainMm, persistenceHours };
+};
+
 WX.aggregateInterval = (rows, startIsoLocal, endIsoLocal) => {
   const start = WX.localMinute(startIsoLocal), end = WX.localMinute(endIsoLocal);
   if (start == null || end == null || end <= start) return null;
@@ -76,7 +110,7 @@ WX.aggregateInterval = (rows, startIsoLocal, endIsoLocal) => {
     // Instantaneous variables are approximated over the clock hour starting at t.
     // This gives short sessions (e.g. 12:10–12:55) a usable weather context.
     const wi = WX.overlapHours(start, end, t, t + 60);
-    if (wi > 0) instant.push({ row, weight: wi });
+    if (wi > 0) instant.push({ row, weight: wi, minute: t + 30 });
 
     // Open-Meteo precipitation/rain are sums of the preceding hour, so the value
     // timestamped at t is apportioned over [t-60, t).
@@ -99,6 +133,20 @@ WX.aggregateInterval = (rows, startIsoLocal, endIsoLocal) => {
   const rainHours = precip.reduce((a,x)=>a+((Number(x.row.rain)>0||Number(x.row.precipitation)>0)?x.weight:0),0);
   const gusts = instant.map(x=>Number(x.row.windGusts)).filter(Number.isFinite);
 
+  let wetWeight=0, wetSum=0, wetMax=0, wetAge=null, wetSource=0, wetPersistence=0;
+  for (const x of instant) {
+    const wet = WX.wetRoadAt(rows, x.minute);
+    wetWeight += x.weight; wetSum += wet.score * x.weight;
+    if (wet.score > wetMax) {
+      wetMax=wet.score; wetAge=wet.ageHours; wetSource=wet.sourceRainMm; wetPersistence=wet.persistenceHours;
+    }
+  }
+  // Active rain remains a strong rain context even before its hourly bucket has
+  // fully elapsed. Residual wetness takes over smoothly when the shower stops.
+  const activeRainIntensity = Math.min(1.5, WX.rainImpact(rainMm / Math.max(0.25,(end-start)/60)));
+  const residualWet = wetWeight ? wetSum / wetWeight : 0;
+  const wetRoadIndex = Math.max(activeRainIntensity, residualWet);
+
   return {
     hours: (end - start) / 60,
     weatherObservationHours: instant.reduce((a,x)=>a+x.weight,0),
@@ -107,6 +155,12 @@ WX.aggregateInterval = (rows, startIsoLocal, endIsoLocal) => {
     precipitationMm,
     rainMm,
     rainHours,
+    wetRoadIndex,
+    wetRoadMax: Math.max(wetRoadIndex,wetMax),
+    wetRoadActive: rainMm >= 0.05 || wetRoadIndex >= 0.12,
+    recentRainAgeHours: wetAge,
+    recentRainSourceMm: wetSource,
+    rainPersistenceHours: wetPersistence,
     windSpeedAvg: weightedAverage("windSpeed"),
     windGustMax: gusts.length ? Math.max(...gusts) : null,
     dominantWeatherCode: WX.weightedMode(instant.map(x=>[Number(x.row.weatherCode),x.weight]))
@@ -130,7 +184,12 @@ WX.similarity = (a, b) => {
   const rainA = Math.log1p(Number(a.precipitationMm)||0), rainB=Math.log1p(Number(b.precipitationMm)||0);
   const rain = exp((rainA-rainB)/1.2);
   const wind = exp(((Number(a.windSpeedAvg)||0)-(Number(b.windSpeedAvg)||0))/15);
-  return Math.max(0.15, temp*rain*wind);
+  const wetA = Number(a.wetRoadIndex)||0, wetB=Number(b.wetRoadIndex)||0;
+  const wetSimilarity = exp((wetA-wetB)/0.45);
+  // Residual wet-road context is intentionally low-weight: it refines rather
+  // than dominates day/time/recency signals and can still be rejected by ablation.
+  const wet = 0.88 + 0.12 * wetSimilarity;
+  return Math.max(0.15, temp*rain*wind*wet);
 };
 
 WX.fetchJson = async url => {
