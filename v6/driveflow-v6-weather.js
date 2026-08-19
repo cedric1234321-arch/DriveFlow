@@ -44,21 +44,72 @@ WX.normalizeHourly = payload => {
   }));
 };
 
+// Convert a local ISO timestamp to a timezone-agnostic minute index. We must not
+// let the device's current timezone alter Europe/Paris historical clock values.
+WX.localMinute = value => {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])) / 60000;
+};
+WX.overlapHours = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0)) / 60;
+WX.weightedMode = pairs => {
+  const counts = new Map();
+  let best = null, bestW = -1;
+  for (const [value, weight] of pairs || []) {
+    if (!Number.isFinite(value) || !(weight > 0)) continue;
+    const w = (counts.get(value) || 0) + weight;
+    counts.set(value, w);
+    if (w > bestW) { best = value; bestW = w; }
+  }
+  return best;
+};
+
 WX.aggregateInterval = (rows, startIsoLocal, endIsoLocal) => {
-  const selected = (rows || []).filter(r => r.time >= startIsoLocal && r.time < endIsoLocal);
-  if (!selected.length) return null;
-  const finite = arr => arr.filter(Number.isFinite);
-  const avg = arr => { const x=finite(arr); return x.length ? x.reduce((a,b)=>a+b,0)/x.length : null; };
+  const start = WX.localMinute(startIsoLocal), end = WX.localMinute(endIsoLocal);
+  if (start == null || end == null || end <= start) return null;
+
+  const instant = [], precip = [];
+  for (const row of rows || []) {
+    const t = WX.localMinute(row.time);
+    if (t == null) continue;
+
+    // Instantaneous variables are approximated over the clock hour starting at t.
+    // This gives short sessions (e.g. 12:10–12:55) a usable weather context.
+    const wi = WX.overlapHours(start, end, t, t + 60);
+    if (wi > 0) instant.push({ row, weight: wi });
+
+    // Open-Meteo precipitation/rain are sums of the preceding hour, so the value
+    // timestamped at t is apportioned over [t-60, t).
+    const wp = WX.overlapHours(start, end, t - 60, t);
+    if (wp > 0) precip.push({ row, weight: wp });
+  }
+  if (!instant.length) return null;
+
+  const weightedAverage = key => {
+    let sw = 0, sx = 0;
+    for (const x of instant) {
+      const v = Number(x.row[key]);
+      if (!Number.isFinite(v)) continue;
+      sw += x.weight; sx += v * x.weight;
+    }
+    return sw ? sx / sw : null;
+  };
+  const precipitationMm = precip.reduce((a,x)=>a+(Number(x.row.precipitation)||0)*x.weight,0);
+  const rainMm = precip.reduce((a,x)=>a+(Number(x.row.rain)||0)*x.weight,0);
+  const rainHours = precip.reduce((a,x)=>a+((Number(x.row.rain)>0||Number(x.row.precipitation)>0)?x.weight:0),0);
+  const gusts = instant.map(x=>Number(x.row.windGusts)).filter(Number.isFinite);
+
   return {
-    hours: selected.length,
-    temperatureAvg: avg(selected.map(x=>x.temperature)),
-    apparentTemperatureAvg: avg(selected.map(x=>x.apparentTemperature)),
-    precipitationMm: selected.reduce((a,x)=>a+x.precipitation,0),
-    rainMm: selected.reduce((a,x)=>a+x.rain,0),
-    rainHours: selected.filter(x=>x.rain>0 || x.precipitation>0).length,
-    windSpeedAvg: avg(selected.map(x=>x.windSpeed)),
-    windGustMax: Math.max(...selected.map(x=>x.windGusts)),
-    dominantWeatherCode: WX.mode(selected.map(x=>x.weatherCode).filter(Number.isFinite))
+    hours: (end - start) / 60,
+    weatherObservationHours: instant.reduce((a,x)=>a+x.weight,0),
+    temperatureAvg: weightedAverage("temperature"),
+    apparentTemperatureAvg: weightedAverage("apparentTemperature"),
+    precipitationMm,
+    rainMm,
+    rainHours,
+    windSpeedAvg: weightedAverage("windSpeed"),
+    windGustMax: gusts.length ? Math.max(...gusts) : null,
+    dominantWeatherCode: WX.weightedMode(instant.map(x=>[Number(x.row.weatherCode),x.weight]))
   };
 };
 
