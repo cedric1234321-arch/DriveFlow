@@ -1,0 +1,68 @@
+name: DriveFlow V6 Fuel History
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
+  push:
+    branches: [v6-development]
+    paths:
+      - '.github/workflows/v6-fuel-history.yml'
+      - 'tools/build_montpellier_fuel_history.py'
+
+permissions:
+  contents: write
+
+jobs:
+  build-fuel-history:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v6-development
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download official annual archives
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 'https://donnees.roulez-eco.fr/opendata/annee/2025' -o /tmp/PrixCarburants_annuel_2025.zip
+          curl -L --fail --retry 3 'https://donnees.roulez-eco.fr/opendata/annee' -o /tmp/PrixCarburants_annuel_current.zip
+          unzip -t /tmp/PrixCarburants_annuel_2025.zip >/dev/null
+          unzip -t /tmp/PrixCarburants_annuel_current.zip >/dev/null
+      - name: Build compact Montpellier Gazole series
+        run: |
+          python tools/build_montpellier_fuel_history.py \
+            /tmp/PrixCarburants_annuel_2025.zip \
+            /tmp/PrixCarburants_annuel_current.zip \
+            --start 2025-01-30 \
+            --end "$(date +%F)" \
+            --radius-km 15 \
+            --max-stale-days 60 \
+            --min-stations 3 \
+            --output v6/fuel-history-montpellier.json
+          python -m json.tool v6/fuel-history-montpellier.json >/dev/null
+      - name: Validate generated coverage
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('v6/fuel-history-montpellier.json',encoding='utf-8'))
+          days=p.get('days',[])
+          priced=[d for d in days if d.get('pricePerL') is not None]
+          assert len(days) >= 500, f'Unexpectedly short series: {len(days)}'
+          assert len(priced)/len(days) >= .98, 'Too many missing daily prices'
+          assert p.get('stationsInRadius',0) >= 10, 'Too few local stations'
+          assert all(.5 <= d['pricePerL'] <= 4 for d in priced)
+          print({'days':len(days),'priced':len(priced),'stations':p.get('stationsInRadius')})
+          PY
+      - name: Commit updated derived series
+        run: |
+          if git diff --quiet -- v6/fuel-history-montpellier.json; then
+            echo 'Fuel history already up to date.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add v6/fuel-history-montpellier.json
+          git commit -m 'Update official Montpellier fuel history'
+          git push origin HEAD:v6-development

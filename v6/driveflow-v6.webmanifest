@@ -1,0 +1,14 @@
+{
+  "name": "DriveFlow V6",
+  "short_name": "DriveFlow",
+  "description": "Earnings, savings and activity optimization for independent delivery drivers.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "icons": [
+    {"src":"../driveflow-icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"../driveflow-icon-512.png","sizes":"512x512","type":"image/png"}
+  ]
+}
