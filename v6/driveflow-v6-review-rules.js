@@ -5,9 +5,9 @@ const R={};
 R.n=v=>{const x=Number(v);return Number.isFinite(x)?x:0;};
 R.heatTier=v=>{
   const x=R.n(v);
-  if(x>13.5)return"red";
+  if(x>13)return"red";
   if(x>=12)return"orange";
-  if(x>=10)return"green";
+  if(x>=10.5)return"green";
   return"white";
 };
 R.isoWeekDisplay=key=>{

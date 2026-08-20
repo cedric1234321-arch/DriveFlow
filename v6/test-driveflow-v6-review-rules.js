@@ -1,12 +1,12 @@
 const assert=require('assert');
 const R=require('./driveflow-v6-review-rules.js');
 
-assert.equal(R.heatTier(13.51),'red');
-assert.equal(R.heatTier(13.5),'orange');
+assert.equal(R.heatTier(13.01),'red');
+assert.equal(R.heatTier(13),'orange');
 assert.equal(R.heatTier(12),'orange');
 assert.equal(R.heatTier(11.99),'green');
-assert.equal(R.heatTier(10),'green');
-assert.equal(R.heatTier(9.99),'white');
+assert.equal(R.heatTier(10.5),'green');
+assert.equal(R.heatTier(10.49),'white');
 assert.equal(R.isoWeekDisplay('2026-W34'),'S34 – 2026');
 
 let x=R.dailySavingsSchedule({
