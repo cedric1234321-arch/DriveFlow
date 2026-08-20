@@ -2,7 +2,7 @@ name: DriveFlow V6 CI
 
 on:
   push:
-    branches: [v6-development, v6-hotfix-import-planner, v6-hotfix-weather-forecast, v6-ux-compact-planner-heatmap, v6-live-review-round2]
+    branches: [v6-development, v6-hotfix-import-planner, v6-hotfix-weather-forecast, v6-ux-compact-planner-heatmap, v6-live-review-round2, v6-review-build21]
   pull_request:
     branches: [main]
 
@@ -43,6 +43,7 @@ jobs:
           node --check v6/driveflow-v6-ux-polish.js
           node --check v6/driveflow-v6-review-rules.js
           node --check v6/driveflow-v6-live-review.js
+          node --check v6/driveflow-v6-build21.js
           node --check v6/driveflow-v6-sw.js
           node --check v6/test-driveflow-v6-migration.js
           node --check v6/test-driveflow-v6-rules.js
@@ -77,6 +78,7 @@ jobs:
           grep -q 'driveflow-v6-ux-polish.js' v6/index.html
           grep -q 'driveflow-v6-review-rules.js' v6/index.html
           grep -q 'driveflow-v6-live-review.js' v6/index.html
+          grep -q 'driveflow-v6-build21.js' v6/index.html
           grep -q 'driveflow-v6-intelligence-policy.js' v6/index.html
           grep -q 'driveflow-v6-fuel.js' v6/index.html
           grep -q 'driveflow-v6-savings-compat.js' v6/index.html
